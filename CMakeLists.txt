@@ -10,6 +10,7 @@ set(CMAKE_CUDA_STANDARD 17)
 file(GLOB SOURCES
         "src/*.cpp"
         "src/*.hpp"
+        "src/*.h"
         "src/*.cu"
 )
 
