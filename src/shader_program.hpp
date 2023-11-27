@@ -3,6 +3,7 @@
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 #include <string>
+#include <unordered_map>
 
 class ShaderProgram {
 public:
@@ -35,6 +36,7 @@ private:
 private:
     GLuint m_id;
     bool m_parsing_failed;
+    std::unordered_map<std::string, int> m_uniform_location_cache;
 };
 
 #endif

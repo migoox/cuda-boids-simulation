@@ -1,11 +1,8 @@
-//
-// Created by billyk on 11/27/23.
-//
-
-#include "boid.hpp"
+#include <random>
+#include "boids.hpp"
 #include "gl_debug.h"
 
-Boid::Boid()
+Boids::Boids()
 : m_vao(0), m_vbo(0), m_ebo(0), m_count(0) {
 
     GLCall( glGenVertexArrays(1, &m_vao) );
@@ -40,15 +37,30 @@ Boid::Boid()
     GLCall( glBindVertexArray(0) );
 }
 
-void Boid::draw(ShaderProgram& shader_program) {
+void Boids::draw(ShaderProgram& shader_program) {
     shader_program.bind();
     GLCall( glBindVertexArray(m_vao) );
     GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo) );
-    GLCall( glDrawElements(GL_TRIANGLES, m_count, GL_UNSIGNED_INT, nullptr) );
+    GLCall( glDrawElementsInstanced(GL_TRIANGLES, m_count, GL_UNSIGNED_INT, nullptr, BOIDS_COUNT) );
+    //GLCall( glDrawElements(GL_TRIANGLES, m_count, GL_UNSIGNED_INT, nullptr) );
 }
 
-Boid::~Boid() {
+Boids::~Boids() {
     GLCall( glDeleteVertexArrays(1, &m_vao) );
     GLCall( glDeleteBuffers(1, &m_vbo) );
     GLCall( glDeleteBuffers(1, &m_ebo) );
+}
+
+glm::vec3 Boids::rand_pos(float minX, float maxX, float minY, float maxY, float minZ, float maxZ) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> distX(minX, maxX);
+    std::uniform_real_distribution<float> distY(minY, maxY);
+    std::uniform_real_distribution<float> distZ(minZ, maxZ);
+
+    float x = distX(gen);
+    float y = distY(gen);
+    float z = distZ(gen);
+
+    return {x, y, z};
 }

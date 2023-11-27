@@ -30,7 +30,16 @@ void ShaderProgram::unbind() {
 }
 
 GLint ShaderProgram::get_uniform_location(const char *name) {
-    return 0;
+    if (m_uniform_location_cache.find(name) != m_uniform_location_cache.end())
+        return m_uniform_location_cache[name];
+
+    GLCall( int location = glGetUniformLocation(m_id, name) );
+    if (location == -1)
+        std::cout << "[OpenGL] Warning: No active uniform variable with name " << name << " found" << std::endl;
+
+    m_uniform_location_cache[name] = location;
+
+    return location;
 }
 
 void ShaderProgram::set_uniform_1i(const char* name, int value)

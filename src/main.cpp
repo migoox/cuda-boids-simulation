@@ -5,9 +5,13 @@
 #include "vendor/imgui/imgui.h"
 
 #include "shader_program.hpp"
-#include "boid.hpp"
+#include "boids.hpp"
+#include "gl_debug.h"
 
 #include <iostream>
+#include <random>
+#include <glm/glm.hpp>
+#include <glm/gtx/transform.hpp>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
@@ -84,16 +88,38 @@ int main()
     // -------------------------------------------------------------------------
 
     ShaderProgram shader_program("../res/boid.vert", "../res/boid.frag");
-    Boid boid;
+    Boids boids;
+
+    glm::mat4 proj = glm::perspective(
+            float(glm::radians(90.)),
+            float(SCR_WIDTH) / float(SCR_HEIGHT),
+            .1f,
+            100.f
+    );
+
+    glm::mat4 view = glm::lookAt(
+            glm::vec3(0., 0., 5.),
+            glm::vec3(0., 0., 0.),
+            glm::vec3(0., 1., 0.)
+    );
+
+    shader_program.bind();
+    shader_program.set_uniform_mat4f("u_projection", proj);
+    shader_program.set_uniform_mat4f("u_view", view);
+    for (int i = 0; i < BOIDS_COUNT; ++i) {
+        boids.positions[i] = Boids::rand_pos(5., -5., 5., -5., 5., -5.);
+        shader_program.set_uniform_3f(("u_positions[" + std::to_string(i) + "]").c_str(), boids.positions[i]);
+    }
 
     // Our state
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // uncomment this call to draw in wireframe polygons.
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
 
     // render loop
     // -----------
+    GLCall( glEnable(GL_DEPTH_TEST) );
     while (!glfwWindowShouldClose(window))
     {
         // input
@@ -128,10 +154,12 @@ int main()
         ImGui::Render();
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+
 
         // Draw triangle
-        boid.draw(shader_program);
+        boids.draw(shader_program);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
