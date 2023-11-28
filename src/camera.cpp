@@ -8,12 +8,12 @@
 #include <algorithm>
 
 common::OrbitingCamera::OrbitingCamera(glm::vec3 center, float screen_width, float screen_height)
-: m_center(center), m_radius(5.), m_polar_angle(glm::radians(30.)), m_azimuthal_angle(30.) {
+: m_center(center), m_radius(30.), m_polar_angle(glm::radians(30.)), m_azimuthal_angle(30.) {
     m_proj_mat = glm::perspectiveLH(
             0.33f * glm::pi<float>(),
             screen_width / screen_height,
             0.1f,
-            100.0f
+            500.0f
     );
     update_view_matrix();
 }

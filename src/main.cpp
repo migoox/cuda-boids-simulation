@@ -15,7 +15,7 @@
 #include <glm/gtx/transform.hpp>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow *window);
+void process_input(GLFWwindow *window);
 bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera);
 
 const unsigned int SCR_WIDTH = 800;
@@ -93,33 +93,18 @@ int main()
 
     boids::SimulationParameters sim_params;
     boids::BoidsRenderer boids_renderer;
+
     boids::Boids boids;
-
-    common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
-
     boids::rand_aquarium_positions(sim_params, boids.position);
-
     boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
     boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
 
-    glm::mat4 proj = glm::perspectiveLH(
-            float(glm::radians(90.)),
-            float(SCR_WIDTH) / float(SCR_HEIGHT),
-            .1f,
-            100.f
-    );
-
-    glm::mat4 view = glm::lookAtLH(
-            glm::vec3(0., 0., -5.),
-            glm::vec3(0., 0., 0.),
-            glm::vec3(0., 1., 0.)
-    );
-
+    common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
     shader_program.bind();
     shader_program.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
 
     // uncomment this call to draw in wireframe polygons.
-    GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
+    //GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
 
     std::chrono::steady_clock::time_point current_time = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point previous_time = current_time;
@@ -132,7 +117,7 @@ int main()
         // input
         // -----
         glfwPollEvents();
-        processInput(window);
+        process_input(window);
         if (process_camera_input(window, camera)) {
             shader_program.bind();
             shader_program.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
@@ -143,15 +128,17 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
         {
             ImGui::Begin("Simulation parameters");
             ImGui::Text("Simulation average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
             ImGui::SliderFloat("View radius", &sim_params.distance, 0.0f, 100.0f);
-            ImGui::SliderFloat("Separation", &sim_params.separation, 0.0f, 1.0f);
-            ImGui::SliderFloat("Alignment", &sim_params.alignment, 0.0f, 1.0f);
-            ImGui::SliderFloat("Cohesion", &sim_params.cohesion, 0.0f, 1.0f);
+            ImGui::SliderFloat("Separation", &sim_params.separation, 0.0f, 5.0f);
+            ImGui::SliderFloat("Alignment", &sim_params.alignment, 0.0f, 5.0f);
+            ImGui::SliderFloat("Cohesion", &sim_params.cohesion, 0.0f, 5.0f);
+            ImGui::SliderFloat("Min speed", &sim_params.min_speed, 0.0f, 5.0f);
+            ImGui::SliderFloat("Max speed", &sim_params.max_speed, 0.0f, 5.0f);
+            ImGui::SliderFloat("Noise", &sim_params.noise, 0.0f, 5.0f);
 
             ImGui::End();
         }
@@ -166,10 +153,9 @@ int main()
         // Get the delta time in seconds
         float dt_as_seconds = delta_time.count();
 
-        // boids::update_simulation(boids.position, boids.velocity, glm::vec3(0.0, 0.0, 1.0), dt_as_seconds);
-//        boids::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, dt_as_seconds);
-//        boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
-//        boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
+        boids::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, dt_as_seconds);
+        boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
+        boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -213,19 +199,19 @@ bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera) {
     }
 
     if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-        camera.update_radius(-0.2f);
+        camera.update_radius(-0.8f);
         result = true;
     }
 
     if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-        camera.update_radius(0.2f);
+        camera.update_radius(0.8f);
         result = true;
     }
 
     return result;
 }
 // Process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
-void processInput(GLFWwindow *window)
+void process_input(GLFWwindow *window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);

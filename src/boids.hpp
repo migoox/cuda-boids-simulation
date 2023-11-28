@@ -2,7 +2,7 @@
 #define BOIDS_SIMULATION_BOIDS_HPP
 
 // TODO: move to config file
-#define BOIDS_COUNT 300
+#define BOIDS_COUNT 500
 
 #include <GL/glew.h>
 #include "shader_program.hpp"
@@ -11,17 +11,21 @@
 namespace boids {
     using BoidId = uint32_t;
 
-
     class SimulationParameters {
     public:
         SimulationParameters();
-        SimulationParameters(float distance, float separation, float alignment, float cohesion, glm::vec3 aquarium_size);
+        SimulationParameters(float distance, float separation, float alignment, float cohesion);
 
     public:
         float distance;
         float separation;
         float alignment;
         float cohesion;
+
+        float max_speed;
+        float min_speed;
+
+        float noise;
 
         glm::vec3 aquarium_size;
     };
@@ -61,8 +65,6 @@ namespace boids {
 
     void rand_aquarium_positions(const SimulationParameters &sim_params, glm::vec3 positions[BOIDS_COUNT]);
 
-    void update_simulation(glm::vec3 position[BOIDS_COUNT], glm::vec3 velocity[BOIDS_COUNT], glm::vec3 acceleration, float dt);
-
     // This function change the direction that the boid is facing basing on it's velocity (d = ||v||)
     void update_basis_vectors(
             glm::vec3 velocity[BOIDS_COUNT],
@@ -79,7 +81,6 @@ namespace boids {
             glm::vec3 right[BOIDS_COUNT]
     );
 
-    glm::vec3 rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
 
     void update_simulation_naive(
             const SimulationParameters &sim_params,
@@ -88,6 +89,10 @@ namespace boids {
             glm::vec3 acceleration[BOIDS_COUNT],
             float dt
     );
+
+    glm::vec3 rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
+    glm::vec3 rand_unit_vec();
 }
+
 
 #endif //BOIDS_SIMULATION_BOIDS_HPP
