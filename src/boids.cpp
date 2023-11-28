@@ -3,7 +3,7 @@
 #include "gl_debug.h"
 
 boids::SimulationParameters::SimulationParameters()
-: distance(5.f), separation(1.f), alignment(1.f), cohesion(1.f), aquarium_size(glm::vec3(50.f, 50.f, 50.f)) { }
+: distance(5.f), separation(1.f), alignment(1.f), cohesion(1.f), aquarium_size(glm::vec3(20.f, 20.f, 20.f)) { }
 
 boids::SimulationParameters::SimulationParameters(float distance, float separation, float alignment, float cohesion, glm::vec3 aquarium_size)
 : distance(distance), separation(separation), alignment(alignment), cohesion(cohesion), aquarium_size(aquarium_size) { }
@@ -124,9 +124,22 @@ void boids::update_simulation(glm::vec3 *position, glm::vec3 *velocity, glm::vec
     }
 }
 
-void boids::update_simulation_naive(const SimulationParameters &sim_params, glm::vec3 position[BOIDS_COUNT], glm::vec3 velocity[BOIDS_COUNT], float dt) {
+void boids::update_simulation_naive(
+        const SimulationParameters &sim_params,
+        glm::vec3 position[BOIDS_COUNT],
+        glm::vec3 velocity[BOIDS_COUNT],
+        glm::vec3 acceleration[BOIDS_COUNT],
+        float dt
+) {
+    glm::vec3 separation, avg_vel, avg_pos;
+    uint32_t neighbors_count;
 
     for (BoidId i = 0; i < BOIDS_COUNT; ++i) {
+        separation = glm::vec3(0.);
+        avg_vel = glm::vec3(0.);
+        avg_pos = glm::vec3(0.);
+        neighbors_count = 0;
+
         for (BoidId j = 0; j < BOIDS_COUNT; ++j) {
 
             // Skip if boid is not in the field of view
@@ -134,25 +147,48 @@ void boids::update_simulation_naive(const SimulationParameters &sim_params, glm:
                 continue;
             }
 
-            // Find separation
+            separation += position[i] - position[j];
+            avg_vel += velocity[j];
+            avg_pos += position[j];
 
-            // Find alignment
-
-            // Find cohesion
-
-            // Final acceleration
-
+            ++neighbors_count;
         }
+
+        if (neighbors_count > 0) {
+            avg_vel /= float(neighbors_count);
+            avg_pos /= float(neighbors_count);
+        }
+
+        // Final acceleration of the current boid
+        acceleration[i] =
+                sim_params.separation * separation +
+                sim_params.alignment * (avg_vel - velocity[i]) +
+                sim_params.cohesion * (avg_pos - position[i]);
+
     }
 
-    glm::vec3 acceleration(0.f, 0.f, 1.f);
     for (BoidId i = 0; i < BOIDS_COUNT; ++i) {
-        velocity[i] += acceleration * dt;
+        velocity[i] += acceleration[i] * dt;
         position[i] += velocity[i] * dt;
 
-        // Lock in aquarium
+        // TODO: Lock in aquarium
         position[i].x = std::fmod(position[i].x, sim_params.aquarium_size.x);
         position[i].y = std::fmod(position[i].y, sim_params.aquarium_size.y);
         position[i].z = std::fmod(position[i].z, sim_params.aquarium_size.z);
+    }
+}
+
+void boids::rand_aquarium_positions(const boids::SimulationParameters &sim_params, glm::vec3 positions[BOIDS_COUNT]) {
+    for (BoidId i = 0; i < BOIDS_COUNT; ++i) {
+        positions[i] = boids::rand_vec(
+                -sim_params.aquarium_size.x / 2.f,
+                sim_params.aquarium_size.x / 2.f,
+
+                -sim_params.aquarium_size.y / 2.f,
+                sim_params.aquarium_size.y / 2.f,
+
+                -sim_params.aquarium_size.z / 2.f,
+                sim_params.aquarium_size.z / 2.f
+        );
     }
 }

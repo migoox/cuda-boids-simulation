@@ -2,7 +2,7 @@
 #define BOIDS_SIMULATION_BOIDS_HPP
 
 // TODO: move to config file
-#define BOIDS_COUNT 100
+#define BOIDS_COUNT 300
 
 #include <GL/glew.h>
 #include "shader_program.hpp"
@@ -59,6 +59,8 @@ namespace boids {
         glm::vec3 right[BOIDS_COUNT]{};   // x axis direction
     };
 
+    void rand_aquarium_positions(const SimulationParameters &sim_params, glm::vec3 positions[BOIDS_COUNT]);
+
     void update_simulation(glm::vec3 position[BOIDS_COUNT], glm::vec3 velocity[BOIDS_COUNT], glm::vec3 acceleration, float dt);
 
     // This function change the direction that the boid is facing basing on it's velocity (d = ||v||)
@@ -79,7 +81,13 @@ namespace boids {
 
     glm::vec3 rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
 
-    void update_simulation_naive(const SimulationParameters &sim_params, glm::vec3 position[BOIDS_COUNT], glm::vec3 velocity[BOIDS_COUNT], float dt);
+    void update_simulation_naive(
+            const SimulationParameters &sim_params,
+            glm::vec3 position[BOIDS_COUNT],
+            glm::vec3 velocity[BOIDS_COUNT],
+            glm::vec3 acceleration[BOIDS_COUNT],
+            float dt
+    );
 }
 
 #endif //BOIDS_SIMULATION_BOIDS_HPP

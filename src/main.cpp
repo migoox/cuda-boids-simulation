@@ -6,6 +6,7 @@
 
 #include "shader_program.hpp"
 #include "boids.hpp"
+#include "camera.hpp"
 #include "gl_debug.h"
 
 #include <iostream>
@@ -15,6 +16,7 @@
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
+bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera);
 
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
@@ -52,7 +54,7 @@ int main()
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
     if (window == NULL)
     {
-        std::cout << "Failed to create GLFW window" << std::endl;
+        std::cout << "[GLFW Init]: Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return -1;
     }
@@ -65,7 +67,7 @@ int main()
     if (GLEW_OK != err)
     {
         /* Problem: glewInit failed, something is seriously wrong. */
-        std::cerr << "Error: " << glewGetErrorString(err) << std::endl;
+        std::cerr << "[GLEW Init]: " << glewGetErrorString(err) << std::endl;
         glfwTerminate();
         return -1;
     }
@@ -92,6 +94,11 @@ int main()
     boids::SimulationParameters sim_params;
     boids::BoidsRenderer boids_renderer;
     boids::Boids boids;
+
+    common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
+
+    boids::rand_aquarium_positions(sim_params, boids.position);
+
     boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
     boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
 
@@ -109,7 +116,7 @@ int main()
     );
 
     shader_program.bind();
-    shader_program.set_uniform_mat4f("u_projection_view", proj * view);
+    shader_program.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
 
     // uncomment this call to draw in wireframe polygons.
     GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
@@ -126,6 +133,10 @@ int main()
         // -----
         glfwPollEvents();
         processInput(window);
+        if (process_camera_input(window, camera)) {
+            shader_program.bind();
+            shader_program.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
+        }
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
@@ -156,9 +167,9 @@ int main()
         float dt_as_seconds = delta_time.count();
 
         // boids::update_simulation(boids.position, boids.velocity, glm::vec3(0.0, 0.0, 1.0), dt_as_seconds);
-        boids::update_simulation_naive(sim_params, boids.position, boids.velocity, dt_as_seconds);
-        boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
-        boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
+//        boids::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, dt_as_seconds);
+//        boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
+//        boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -179,19 +190,51 @@ int main()
     return 0;
 }
 
-// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
-// ---------------------------------------------------------------------------------------------------------
+bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera) {
+    bool result = false;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        camera.update_azimuthal_angle(-glm::radians(2.f));
+        result = true;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        camera.update_azimuthal_angle(glm::radians(2.f));
+        result = true;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+        camera.update_polar_angle(-glm::radians(2.f));
+        result = true;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        camera.update_polar_angle(glm::radians(2.f));
+        result = true;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+        camera.update_radius(-0.2f);
+        result = true;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+        camera.update_radius(0.2f);
+        result = true;
+    }
+
+    return result;
+}
+// Process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 void processInput(GLFWwindow *window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 }
 
-// glfw: whenever the window size changed (by OS or user resize) this callback function executes
-// ---------------------------------------------------------------------------------------------
+// GLFW: whenever the window size changed (by OS or user resize) this callback function executes
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-    // make sure the viewport matches the new window dimensions; note that width and 
+    // Make sure the viewport matches the new window dimensions; note that width and
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }
