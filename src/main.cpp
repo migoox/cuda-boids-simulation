@@ -9,6 +9,7 @@
 #include "gl_debug.h"
 
 #include <iostream>
+#include <chrono>
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
@@ -87,19 +88,22 @@ int main()
     // -------------------------------------------------------------------------
 
     ShaderProgram shader_program("../res/boid.vert", "../res/boid.frag");
+
+    boids::SimulationParameters sim_params;
     boids::BoidsRenderer boids_renderer;
     boids::Boids boids;
+    boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
     boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
 
-    glm::mat4 proj = glm::perspective(
+    glm::mat4 proj = glm::perspectiveLH(
             float(glm::radians(90.)),
             float(SCR_WIDTH) / float(SCR_HEIGHT),
             .1f,
             100.f
     );
 
-    glm::mat4 view = glm::lookAt(
-            glm::vec3(0., 0., 5.),
+    glm::mat4 view = glm::lookAtLH(
+            glm::vec3(0., 0., -5.),
             glm::vec3(0., 0., 0.),
             glm::vec3(0., 1., 0.)
     );
@@ -107,11 +111,11 @@ int main()
     shader_program.bind();
     shader_program.set_uniform_mat4f("u_projection_view", proj * view);
 
-    // Our state
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-
     // uncomment this call to draw in wireframe polygons.
     GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
+
+    std::chrono::steady_clock::time_point current_time = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point previous_time = current_time;
 
     // render loop
     // -----------
@@ -130,24 +134,31 @@ int main()
 
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
         {
-            static float f = 0.0f;
-            static int counter = 0;
+            ImGui::Begin("Simulation parameters");
+            ImGui::Text("Simulation average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+            ImGui::SliderFloat("View radius", &sim_params.distance, 0.0f, 100.0f);
+            ImGui::SliderFloat("Separation", &sim_params.separation, 0.0f, 1.0f);
+            ImGui::SliderFloat("Alignment", &sim_params.alignment, 0.0f, 1.0f);
+            ImGui::SliderFloat("Cohesion", &sim_params.cohesion, 0.0f, 1.0f);
 
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
         }
 
         ImGui::Render();
+
+        // Calculate delta time
+        current_time = std::chrono::steady_clock::now();
+        std::chrono::duration<float> delta_time = std::chrono::duration_cast<std::chrono::duration<float>>(current_time - previous_time);
+        previous_time = current_time;
+
+        // Get the delta time in seconds
+        float dt_as_seconds = delta_time.count();
+
+        // boids::update_simulation(boids.position, boids.velocity, glm::vec3(0.0, 0.0, 1.0), dt_as_seconds);
+        boids::update_simulation_naive(sim_params, boids.position, boids.velocity, dt_as_seconds);
+        boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
+        boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

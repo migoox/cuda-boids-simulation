@@ -2,6 +2,12 @@
 #include "boids.hpp"
 #include "gl_debug.h"
 
+boids::SimulationParameters::SimulationParameters()
+: distance(5.f), separation(1.f), alignment(1.f), cohesion(1.f), aquarium_size(glm::vec3(50.f, 50.f, 50.f)) { }
+
+boids::SimulationParameters::SimulationParameters(float distance, float separation, float alignment, float cohesion, glm::vec3 aquarium_size)
+: distance(distance), separation(separation), alignment(alignment), cohesion(cohesion), aquarium_size(aquarium_size) { }
+
 boids::BoidsRenderer::BoidsRenderer()
 : m_vao(0), m_vbo(0), m_ebo(0), m_count(0) {
 
@@ -10,10 +16,11 @@ boids::BoidsRenderer::BoidsRenderer()
     GLCall( glGenBuffers(1, &m_vbo) );
     GLCall( glGenBuffers(1, &m_ebo) );
 
+    // Let a boid face the direction based on forward vector in lh
     float vertices[] = {
-            -0.3f,  0.f, 0.3f,
-            0.3f, 0.f, 0.3f,
-            0.f, 0.f, -0.6f,
+            0.3f,  0.f, -0.3f,
+            -0.3f, 0.f, -0.3f,
+            0.f, 0.f, 0.6f,
     };
 
     unsigned int indices[] = {
@@ -54,13 +61,13 @@ boids::BoidsRenderer::~BoidsRenderer() {
 glm::vec3 boids::rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> distX(min_x, max_x);
-    std::uniform_real_distribution<float> distY(min_y, max_y);
-    std::uniform_real_distribution<float> distZ(min_z, max_z);
+    std::uniform_real_distribution<float> dist_x(min_x, max_x);
+    std::uniform_real_distribution<float> dist_y(min_y, max_y);
+    std::uniform_real_distribution<float> dist_z(min_z, max_z);
 
-    float x = distX(gen);
-    float y = distY(gen);
-    float z = distZ(gen);
+    float x = dist_x(gen);
+    float y = dist_y(gen);
+    float z = dist_z(gen);
 
     return {x, y, z};
 }
@@ -72,21 +79,26 @@ boids::Boids::Boids() {
 void boids::Boids::reset() {
     for (int i = 0; i < BOIDS_COUNT; ++i) {
         this->position[i] = boids::rand_vec(5., -5., 5., -5., 5., -5.);
-        this->forward[i] = glm::vec3(0., 0., 1.);
-        this->up[i] = glm::vec3(0., 1., 0.);
-        this->right[i] = glm::vec3(1., 0., 0.);
+        this->forward[i] = glm::vec3(0.f, 0.f, 1.f);
+        this->up[i] = glm::vec3(0.f, 1.f, 0.f);
+        this->right[i] = glm::vec3(1.f, 0.f, 0.f);
 
-        this->velocity[i] = boids::rand_vec(1., -1., 1., -1., 1., -1.);
+        this->velocity[i] = glm::normalize(boids::rand_vec(1., -1., 1., -1., 1., -1.));
+        this->acceleration[i] = glm::vec3(0.f);
     }
 }
 
-void boids::find_basis_vectors(
+void boids::update_basis_vectors(
         glm::vec3 velocity[BOIDS_COUNT],
         glm::vec3 forward[BOIDS_COUNT],
         glm::vec3 up[BOIDS_COUNT],
         glm::vec3 right[BOIDS_COUNT]
 ) {
-
+    for (int i = 0; i < BOIDS_COUNT; ++i) {
+        forward[i] = glm::normalize(velocity[i]);
+        right[i] = glm::normalize(glm::cross(up[i], forward[i]));
+        up[i] = glm::normalize(glm::cross(forward[i] , right[i]));
+    }
 }
 
 void boids::update_shader(
@@ -102,5 +114,45 @@ void boids::update_shader(
         shader_program.set_uniform_3f(("u_forward[" + std::to_string(i) + "]").c_str(), forward[i]);
         shader_program.set_uniform_3f(("u_up[" + std::to_string(i) + "]").c_str(), up[i]);
         shader_program.set_uniform_3f(("u_right[" + std::to_string(i) + "]").c_str(), right[i]);
+    }
+}
+
+void boids::update_simulation(glm::vec3 *position, glm::vec3 *velocity, glm::vec3 acceleration, float dt) {
+    for (int i = 0; i < BOIDS_COUNT; ++i) {
+        velocity[i] += acceleration * dt;
+        position[i] += velocity[i] * dt;
+    }
+}
+
+void boids::update_simulation_naive(const SimulationParameters &sim_params, glm::vec3 position[BOIDS_COUNT], glm::vec3 velocity[BOIDS_COUNT], float dt) {
+
+    for (BoidId i = 0; i < BOIDS_COUNT; ++i) {
+        for (BoidId j = 0; j < BOIDS_COUNT; ++j) {
+
+            // Skip if boid is not in the field of view
+            if (glm::dot(position[i] - position[j], position[i] - position[j]) > sim_params.distance * sim_params.distance) {
+                continue;
+            }
+
+            // Find separation
+
+            // Find alignment
+
+            // Find cohesion
+
+            // Final acceleration
+
+        }
+    }
+
+    glm::vec3 acceleration(0.f, 0.f, 1.f);
+    for (BoidId i = 0; i < BOIDS_COUNT; ++i) {
+        velocity[i] += acceleration * dt;
+        position[i] += velocity[i] * dt;
+
+        // Lock in aquarium
+        position[i].x = std::fmod(position[i].x, sim_params.aquarium_size.x);
+        position[i].y = std::fmod(position[i].y, sim_params.aquarium_size.y);
+        position[i].z = std::fmod(position[i].z, sim_params.aquarium_size.z);
     }
 }

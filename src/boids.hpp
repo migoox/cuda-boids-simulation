@@ -11,6 +11,21 @@
 namespace boids {
     using BoidId = uint32_t;
 
+
+    class SimulationParameters {
+    public:
+        SimulationParameters();
+        SimulationParameters(float distance, float separation, float alignment, float cohesion, glm::vec3 aquarium_size);
+
+    public:
+        float distance;
+        float separation;
+        float alignment;
+        float cohesion;
+
+        glm::vec3 aquarium_size;
+    };
+
     class BoidsRenderer {
     public:
         // Initializes boids data
@@ -36,6 +51,7 @@ namespace boids {
         // Boid's position and velocity
         glm::vec3 position[BOIDS_COUNT]{};
         glm::vec3 velocity[BOIDS_COUNT]{};
+        glm::vec3 acceleration[BOIDS_COUNT]{};
 
         // Boid's basis vectors (assuming left-handed)
         glm::vec3 forward[BOIDS_COUNT]{}; // z axis direction
@@ -43,8 +59,10 @@ namespace boids {
         glm::vec3 right[BOIDS_COUNT]{};   // x axis direction
     };
 
+    void update_simulation(glm::vec3 position[BOIDS_COUNT], glm::vec3 velocity[BOIDS_COUNT], glm::vec3 acceleration, float dt);
+
     // This function change the direction that the boid is facing basing on it's velocity (d = ||v||)
-    void find_basis_vectors(
+    void update_basis_vectors(
             glm::vec3 velocity[BOIDS_COUNT],
             glm::vec3 forward[BOIDS_COUNT],
             glm::vec3 up[BOIDS_COUNT],
@@ -60,6 +78,8 @@ namespace boids {
     );
 
     glm::vec3 rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
+
+    void update_simulation_naive(const SimulationParameters &sim_params, glm::vec3 position[BOIDS_COUNT], glm::vec3 velocity[BOIDS_COUNT], float dt);
 }
 
 #endif //BOIDS_SIMULATION_BOIDS_HPP
