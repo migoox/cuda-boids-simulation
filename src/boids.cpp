@@ -2,17 +2,18 @@
 #include "boids.hpp"
 #include "gl_debug.h"
 
-Boids::Boids()
+boids::BoidsRenderer::BoidsRenderer()
 : m_vao(0), m_vbo(0), m_ebo(0), m_count(0) {
 
+    // Initialize OpenGL
     GLCall( glGenVertexArrays(1, &m_vao) );
     GLCall( glGenBuffers(1, &m_vbo) );
     GLCall( glGenBuffers(1, &m_ebo) );
 
     float vertices[] = {
-            0.5f,  0.5f, 0.0f,  // top right
-            0.5f, -0.5f, 0.0f,  // bottom right
-            -0.5f, -0.5f, 0.0f,  // bottom left
+            -0.3f,  0.f, 0.3f,
+            0.3f, 0.f, 0.3f,
+            0.f, 0.f, -0.6f,
     };
 
     unsigned int indices[] = {
@@ -37,30 +38,69 @@ Boids::Boids()
     GLCall( glBindVertexArray(0) );
 }
 
-void Boids::draw(ShaderProgram& shader_program) {
+void boids::BoidsRenderer::draw(ShaderProgram& shader_program) const {
     shader_program.bind();
     GLCall( glBindVertexArray(m_vao) );
     GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo) );
     GLCall( glDrawElementsInstanced(GL_TRIANGLES, m_count, GL_UNSIGNED_INT, nullptr, BOIDS_COUNT) );
-    //GLCall( glDrawElements(GL_TRIANGLES, m_count, GL_UNSIGNED_INT, nullptr) );
 }
 
-Boids::~Boids() {
+boids::BoidsRenderer::~BoidsRenderer() {
     GLCall( glDeleteVertexArrays(1, &m_vao) );
     GLCall( glDeleteBuffers(1, &m_vbo) );
     GLCall( glDeleteBuffers(1, &m_ebo) );
 }
 
-glm::vec3 Boids::rand_pos(float minX, float maxX, float minY, float maxY, float minZ, float maxZ) {
+glm::vec3 boids::rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> distX(minX, maxX);
-    std::uniform_real_distribution<float> distY(minY, maxY);
-    std::uniform_real_distribution<float> distZ(minZ, maxZ);
+    std::uniform_real_distribution<float> distX(min_x, max_x);
+    std::uniform_real_distribution<float> distY(min_y, max_y);
+    std::uniform_real_distribution<float> distZ(min_z, max_z);
 
     float x = distX(gen);
     float y = distY(gen);
     float z = distZ(gen);
 
     return {x, y, z};
+}
+
+boids::Boids::Boids() {
+    this->reset();
+}
+
+void boids::Boids::reset() {
+    for (int i = 0; i < BOIDS_COUNT; ++i) {
+        this->position[i] = boids::rand_vec(5., -5., 5., -5., 5., -5.);
+        this->forward[i] = glm::vec3(0., 0., 1.);
+        this->up[i] = glm::vec3(0., 1., 0.);
+        this->right[i] = glm::vec3(1., 0., 0.);
+
+        this->velocity[i] = boids::rand_vec(1., -1., 1., -1., 1., -1.);
+    }
+}
+
+void boids::find_basis_vectors(
+        glm::vec3 velocity[BOIDS_COUNT],
+        glm::vec3 forward[BOIDS_COUNT],
+        glm::vec3 up[BOIDS_COUNT],
+        glm::vec3 right[BOIDS_COUNT]
+) {
+
+}
+
+void boids::update_shader(
+        ShaderProgram &shader_program,
+        glm::vec3 position[BOIDS_COUNT],
+        glm::vec3 forward[BOIDS_COUNT],
+        glm::vec3 up[BOIDS_COUNT],
+        glm::vec3 right[BOIDS_COUNT]
+) {
+    shader_program.bind();
+    for (int i = 0; i < BOIDS_COUNT; ++i) {
+        shader_program.set_uniform_3f(("u_position[" + std::to_string(i) + "]").c_str(), position[i]);
+        shader_program.set_uniform_3f(("u_forward[" + std::to_string(i) + "]").c_str(), forward[i]);
+        shader_program.set_uniform_3f(("u_up[" + std::to_string(i) + "]").c_str(), up[i]);
+        shader_program.set_uniform_3f(("u_right[" + std::to_string(i) + "]").c_str(), right[i]);
+    }
 }

@@ -9,7 +9,6 @@
 #include "gl_debug.h"
 
 #include <iostream>
-#include <random>
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
@@ -88,7 +87,9 @@ int main()
     // -------------------------------------------------------------------------
 
     ShaderProgram shader_program("../res/boid.vert", "../res/boid.frag");
-    Boids boids;
+    boids::BoidsRenderer boids_renderer;
+    boids::Boids boids;
+    boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
 
     glm::mat4 proj = glm::perspective(
             float(glm::radians(90.)),
@@ -104,12 +105,7 @@ int main()
     );
 
     shader_program.bind();
-    shader_program.set_uniform_mat4f("u_projection", proj);
-    shader_program.set_uniform_mat4f("u_view", view);
-    for (int i = 0; i < BOIDS_COUNT; ++i) {
-        boids.positions[i] = Boids::rand_pos(5., -5., 5., -5., 5., -5.);
-        shader_program.set_uniform_3f(("u_positions[" + std::to_string(i) + "]").c_str(), boids.positions[i]);
-    }
+    shader_program.set_uniform_mat4f("u_projection_view", proj * view);
 
     // Our state
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -156,10 +152,8 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-
-
         // Draw triangle
-        boids.draw(shader_program);
+        boids_renderer.draw(shader_program);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
