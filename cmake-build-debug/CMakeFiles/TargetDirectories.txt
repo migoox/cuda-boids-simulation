@@ -1,6 +1,0 @@
-/home/billyk/dev/CUDA/boids-simulation/cmake-build-debug/CMakeFiles/boids_simulation.dir
-/home/billyk/dev/CUDA/boids-simulation/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/billyk/dev/CUDA/boids-simulation/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/billyk/dev/CUDA/boids-simulation/cmake-build-debug/src/vendor/CMakeFiles/ImGui.dir
-/home/billyk/dev/CUDA/boids-simulation/cmake-build-debug/src/vendor/CMakeFiles/edit_cache.dir
-/home/billyk/dev/CUDA/boids-simulation/cmake-build-debug/src/vendor/CMakeFiles/rebuild_cache.dir

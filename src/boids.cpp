@@ -22,52 +22,29 @@ boids::SimulationParameters::SimulationParameters(float distance, float separati
 }
 
 boids::BoidsRenderer::BoidsRenderer()
-: m_vao(0), m_vbo(0), m_ebo(0), m_count(0) {
-
-    GLCall( glGenVertexArrays(1, &m_vao) );
-    GLCall( glGenBuffers(1, &m_vbo) );
-    GLCall( glGenBuffers(1, &m_ebo) );
-
+: m_mesh(common::Mesh()) {
     // Let a boid face the direction based on forward vector in lh
     float vertices[] = {
             0.3f,  0.f, -0.3f,
             -0.3f, 0.f, -0.3f,
             0.f, 0.f, 0.6f,
+            0.f, 0.3f, -0.3f
     };
 
     unsigned int indices[] = {
-            0, 1, 2,  // Triangle
+            0, 1, 2,
+            0, 3, 2,
+            1, 2, 3,
+            0, 1, 3
     };
 
-    m_count = 3;
-
-    GLCall( glBindVertexArray(m_vao) );
-
-    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_vbo) );
-    GLCall( glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW) );
-
-    GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo) );
-    GLCall( glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW) );
-
-    GLCall( glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0) );
-    GLCall( glEnableVertexAttribArray(0) );
-
-    GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0) );
-    GLCall( glBindBuffer(GL_ARRAY_BUFFER, 0) );
-    GLCall( glBindVertexArray(0) );
+    m_mesh.set(vertices, sizeof(vertices), indices, sizeof(indices), 12);
 }
 
-void boids::BoidsRenderer::draw(ShaderProgram& shader_program) const {
+void boids::BoidsRenderer::draw(const ShaderProgram& shader_program) const {
     shader_program.bind();
-    GLCall( glBindVertexArray(m_vao) );
-    GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo) );
-    GLCall( glDrawElementsInstanced(GL_TRIANGLES, m_count, GL_UNSIGNED_INT, nullptr, BOIDS_COUNT) );
-}
-
-boids::BoidsRenderer::~BoidsRenderer() {
-    GLCall( glDeleteVertexArrays(1, &m_vao) );
-    GLCall( glDeleteBuffers(1, &m_vbo) );
-    GLCall( glDeleteBuffers(1, &m_ebo) );
+    m_mesh.bind();
+    GLCall( glDrawElementsInstanced(GL_TRIANGLES, m_mesh.get_count(), GL_UNSIGNED_INT, nullptr, BOIDS_COUNT) );
 }
 
 glm::vec3 boids::rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z) {
@@ -136,14 +113,11 @@ void boids::update_simulation_naive(
         glm::vec3 acceleration[BOIDS_COUNT],
         float dt
 ) {
-    glm::vec3 separation, avg_vel, avg_pos;
-    uint32_t neighbors_count;
-
     for (BoidId i = 0; i < BOIDS_COUNT; ++i) {
-        separation = glm::vec3(0.);
-        avg_vel = glm::vec3(0.);
-        avg_pos = glm::vec3(0.);
-        neighbors_count = 0;
+        glm::vec3 separation(0.);
+        glm::vec3 avg_vel(0.);
+        glm::vec3 avg_pos(0.);
+        uint32_t neighbors_count = 0;
 
         for (BoidId j = 0; j < BOIDS_COUNT; ++j) {
             if (i == j) {
@@ -179,7 +153,7 @@ void boids::update_simulation_naive(
 
     }
 
-    float wall = sim_params.distance;
+    float wall = 4.f;
     float wall_power = 15.f;
     for (BoidId i = 0; i < BOIDS_COUNT; ++i) {
         if (position[i].x > sim_params.aquarium_size.x / 2.f - wall) {

@@ -111,7 +111,7 @@ int main()
     basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
 
     // uncomment this call to draw in wireframe polygons.
-    //GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
+    GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
 
     std::chrono::steady_clock::time_point current_time = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point previous_time = current_time;
@@ -121,7 +121,7 @@ int main()
     GLCall( glEnable(GL_DEPTH_TEST) );
     GLCall( glEnable(GL_BLEND) );
     GLCall( glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) );
-    GLCall( glEnable(GL_CULL_FACE) );
+    //GLCall( glEnable(GL_CULL_FACE) );
     GLCall( glCullFace(GL_FRONT) );
     GLCall( glFrontFace(GL_CCW) );
 

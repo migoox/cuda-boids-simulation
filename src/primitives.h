@@ -8,6 +8,11 @@ namespace common {
     public:
         Mesh();
         Mesh(float *vertices, size_t vertices_size, u_int32_t *indices, size_t indices_size, u_int32_t indices_count);
+        ~Mesh();
+
+        void set(float *vertices, size_t vertices_size, u_int32_t *indices, size_t indices_size, u_int32_t indices_count);
+        void load(const char *path);
+
         void bind() const;
         void unbind() const;
 
@@ -22,7 +27,7 @@ namespace common {
     public:
         Box();
 
-        void draw(const ShaderProgram &program);
+        void draw(const ShaderProgram &program) const;
     private:
         Mesh m_mesh;
     };

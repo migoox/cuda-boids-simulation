@@ -7,6 +7,7 @@
 #include <GL/glew.h>
 #include "shader_program.hpp"
 #include <glm/glm.hpp>
+#include "primitives.h"
 
 namespace boids {
     using BoidId = uint32_t;
@@ -35,13 +36,11 @@ namespace boids {
         // Initializes boids data
         BoidsRenderer();
 
-        ~BoidsRenderer();
-
-        void draw(ShaderProgram &shader_program) const;
+        void draw(const ShaderProgram &shader_program) const;
 
     private:
-        GLuint m_vao, m_vbo, m_ebo;
-        uint32_t m_count;
+        common::Mesh m_mesh;
+
     };
 
     class Boids {

@@ -3,25 +3,8 @@
 #include "gl_debug.h"
 
 common::Mesh::Mesh(float *vertices, size_t vertices_size, u_int32_t *indices, size_t indices_size, u_int32_t indices_count)
-        : m_vbo(0), m_ebo(0), m_vao(0), m_count(indices_count) {
-    GLCall( glGenVertexArrays(1, &m_vao) );
-    GLCall( glGenBuffers(1, &m_vbo) );
-    GLCall( glGenBuffers(1, &m_ebo) );
-
-    GLCall( glBindVertexArray(m_vao) );
-
-    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_vbo) );
-    GLCall( glBufferData(GL_ARRAY_BUFFER, vertices_size, vertices, GL_STATIC_DRAW) );
-
-    GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo) );
-    GLCall( glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices_size, indices, GL_STATIC_DRAW) );
-
-    GLCall( glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0) );
-    GLCall( glEnableVertexAttribArray(0) );
-
-    GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0) );
-    GLCall( glBindBuffer(GL_ARRAY_BUFFER, 0) );
-    GLCall( glBindVertexArray(0) );
+        : Mesh() {
+    this->set(vertices, vertices_size, indices, indices_size, indices_count);
 }
 
 common::Mesh::Mesh()
@@ -40,6 +23,35 @@ void common::Mesh::unbind() const {
     GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0) );
     GLCall( glBindBuffer(GL_ARRAY_BUFFER, 0) );
     GLCall( glBindVertexArray(0) );
+}
+
+void common::Mesh::set(float *vertices, size_t vertices_size, u_int32_t *indices, size_t indices_size, u_int32_t indices_count) {
+    m_count = indices_count;
+
+    GLCall( glBindVertexArray(m_vao) );
+
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_vbo) );
+    GLCall( glBufferData(GL_ARRAY_BUFFER, vertices_size, vertices, GL_STATIC_DRAW) );
+
+    GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo) );
+    GLCall( glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices_size, indices, GL_STATIC_DRAW) );
+
+    GLCall( glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0) );
+    GLCall( glEnableVertexAttribArray(0) );
+
+    GLCall( glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0) );
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, 0) );
+    GLCall( glBindVertexArray(0) );
+}
+
+common::Mesh::~Mesh() {
+    GLCall( glDeleteVertexArrays(1, &m_vao) );
+    GLCall( glDeleteBuffers(1, &m_vbo) );
+    GLCall( glDeleteBuffers(1, &m_ebo) );
+}
+
+void common::Mesh::load(const char *path) {
+    // TODO
 }
 
 common::Box::Box() {
@@ -78,10 +90,10 @@ common::Box::Box() {
             6, 7, 3
     };
 
-    m_mesh = Mesh(vertices, sizeof(vertices), indices, sizeof(indices), 36);
+    m_mesh.set(vertices, sizeof(vertices), indices, sizeof(indices), 36);
 }
 
-void common::Box::draw(const ShaderProgram &program) {
+void common::Box::draw(const ShaderProgram &program) const {
     program.bind();
     m_mesh.bind();
     GLCall( glDrawElements(GL_TRIANGLES, m_mesh.get_count(), GL_UNSIGNED_INT, nullptr) );
