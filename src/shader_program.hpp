@@ -12,8 +12,8 @@ public:
 
     bool is_valid() const;
 
-    void bind();
-    void unbind();
+    void bind() const;
+    static void unbind();
 
     void set_uniform_1i(const char* name, int value);
     void set_uniform_2i(const char* name, int v1, int v2);

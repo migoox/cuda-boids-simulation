@@ -8,6 +8,7 @@
 #include "boids.hpp"
 #include "camera.hpp"
 #include "gl_debug.h"
+#include "primitives.h"
 
 #include <iostream>
 #include <chrono>
@@ -89,7 +90,8 @@ int main()
 
     // -------------------------------------------------------------------------
 
-    ShaderProgram shader_program("../res/boid.vert", "../res/boid.frag");
+    ShaderProgram boids_sp("../res/boid.vert", "../res/boid.frag");
+    ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
 
     boids::SimulationParameters sim_params;
     boids::BoidsRenderer boids_renderer;
@@ -97,11 +99,16 @@ int main()
     boids::Boids boids;
     boids::rand_aquarium_positions(sim_params, boids.position);
     boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
-    boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
+    boids::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
 
     common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
-    shader_program.bind();
-    shader_program.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
+    boids_sp.bind();
+    boids_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
+    basic_sp.bind();
+    basic_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
+
+    common::Box aquarium;
+    basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
 
     // uncomment this call to draw in wireframe polygons.
     //GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
@@ -112,6 +119,12 @@ int main()
     // render loop
     // -----------
     GLCall( glEnable(GL_DEPTH_TEST) );
+    GLCall( glEnable(GL_BLEND) );
+    GLCall( glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) );
+    GLCall( glEnable(GL_CULL_FACE) );
+    GLCall( glCullFace(GL_FRONT) );
+    GLCall( glFrontFace(GL_CCW) );
+
     while (!glfwWindowShouldClose(window))
     {
         // input
@@ -119,8 +132,10 @@ int main()
         glfwPollEvents();
         process_input(window);
         if (process_camera_input(window, camera)) {
-            shader_program.bind();
-            shader_program.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
+            boids_sp.bind();
+            boids_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
+            basic_sp.bind();
+            basic_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
         }
 
         // Start the Dear ImGui frame
@@ -155,13 +170,14 @@ int main()
 
         boids::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, dt_as_seconds);
         boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
-        boids::update_shader(shader_program, boids.position, boids.forward, boids.up, boids.right);
+        boids::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
 
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Draw triangle
-        boids_renderer.draw(shader_program);
+        boids_renderer.draw(boids_sp);
+        aquarium.draw(basic_sp);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 

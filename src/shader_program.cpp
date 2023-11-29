@@ -20,7 +20,7 @@ ShaderProgram::~ShaderProgram() {
     GLCall( glDeleteProgram(m_id) );
 }
 
-void ShaderProgram::bind() {
+void ShaderProgram::bind() const {
     GLCall( glUseProgram(m_id) );
 
 }

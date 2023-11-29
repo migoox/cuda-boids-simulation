@@ -24,7 +24,6 @@ boids::SimulationParameters::SimulationParameters(float distance, float separati
 boids::BoidsRenderer::BoidsRenderer()
 : m_vao(0), m_vbo(0), m_ebo(0), m_count(0) {
 
-    // Initialize OpenGL
     GLCall( glGenVertexArrays(1, &m_vao) );
     GLCall( glGenBuffers(1, &m_vbo) );
     GLCall( glGenBuffers(1, &m_ebo) );
@@ -180,7 +179,32 @@ void boids::update_simulation_naive(
 
     }
 
+    float wall = sim_params.distance;
+    float wall_power = 15.f;
     for (BoidId i = 0; i < BOIDS_COUNT; ++i) {
+        if (position[i].x > sim_params.aquarium_size.x / 2.f - wall) {
+            auto intensity = std::abs((sim_params.aquarium_size.x / 2.f - wall - position[i].x) / wall);
+            acceleration[i] += intensity * glm::vec3(-wall_power, 0.f, 0.f);
+        } else if (position[i].x < -sim_params.aquarium_size.x / 2.f + wall) {
+            auto intensity = std::abs((-sim_params.aquarium_size.x / 2.f + wall - position[i].x) / wall);
+            acceleration[i] += intensity * glm::vec3(wall_power, 0.f, 0.f);
+        }
+
+        if (position[i].y > sim_params.aquarium_size.y / 2.f - wall) {
+            auto intensity = std::abs((sim_params.aquarium_size.y / 2.f - wall - position[i].y) / wall);
+            acceleration[i] += intensity * glm::vec3(0.f, -wall_power, 0.f);
+        } else if (position[i].y < -sim_params.aquarium_size.y / 2.f + wall) {
+            auto intensity = std::abs((-sim_params.aquarium_size.y / 2.f + wall - position[i].y) / wall);
+            acceleration[i] += intensity * glm::vec3(0.f, wall_power, 0.f);
+        }
+
+        if (position[i].z > sim_params.aquarium_size.z / 2.f - wall) {
+            auto intensity = std::abs((sim_params.aquarium_size.z / 2.f - wall - position[i].z) / wall);
+            acceleration[i] += intensity * glm::vec3(0.f, 0.f, -wall_power);
+        } else if (position[i].z < -sim_params.aquarium_size.z / 2.f + wall) {
+            auto intensity = std::abs((-sim_params.aquarium_size.z / 2.f + wall - position[i].z) / wall);
+            acceleration[i] += intensity * glm::vec3(0.f, 0.f, wall_power);
+        }
 
         velocity[i] += acceleration[i] * dt;
         if (glm::length(velocity[i]) > sim_params.max_speed) {
@@ -190,25 +214,6 @@ void boids::update_simulation_naive(
         }
 
         position[i] += velocity[i] * dt;
-
-         if (position[i].x > sim_params.aquarium_size.x / 2.f) {
-            position[i].x = -sim_params.aquarium_size.x / 2.f;
-        } else if (position[i].x < -sim_params.aquarium_size.x / 2.f) {
-            position[i].x = sim_params.aquarium_size.x / 2.f;
-        }
-
-        if (position[i].y > sim_params.aquarium_size.y / 2.f) {
-            position[i].y = -sim_params.aquarium_size.y / 2.f;
-        } else if (position[i].y < -sim_params.aquarium_size.y / 2.f) {
-            position[i].y = sim_params.aquarium_size.y / 2.f;
-        }
-
-        if (position[i].z > sim_params.aquarium_size.z / 2.f) {
-            position[i].z = -sim_params.aquarium_size.z / 2.f;
-        } else if (position[i].z < -sim_params.aquarium_size.z / 2.f) {
-            position[i].z = sim_params.aquarium_size.z / 2.f;
-        }
-
     }
 }
 
