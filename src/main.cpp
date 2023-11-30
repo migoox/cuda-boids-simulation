@@ -1,3 +1,5 @@
+#define GLM_FORCE_CUDA
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include "vendor/imgui/backend/imgui_impl_glfw.h"
@@ -9,6 +11,7 @@
 #include "camera.hpp"
 #include "gl_debug.h"
 #include "primitives.h"
+#include "boids_cpu.hpp"
 
 #include <iostream>
 #include <chrono>
@@ -90,15 +93,14 @@ int main()
 
     // -------------------------------------------------------------------------
 
-    ShaderProgram boids_sp("../res/boid.vert", "../res/boid.frag");
-    ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
+    common::ShaderProgram boids_sp("../res/boid.vert", "../res/boid.frag");
+    common::ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
 
     boids::SimulationParameters sim_params;
     boids::BoidsRenderer boids_renderer;
 
     boids::Boids boids;
     boids::rand_aquarium_positions(sim_params, boids.position);
-    boids::cpu::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
     boids::cpu::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
 
     common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
@@ -110,14 +112,12 @@ int main()
     common::Box aquarium;
     basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
 
-    // uncomment this call to draw in wireframe polygons.
+    // Uncomment this call to draw in wireframe polygons.
     GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
 
     std::chrono::steady_clock::time_point current_time = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point previous_time = current_time;
 
-    // render loop
-    // -----------
     GLCall( glEnable(GL_DEPTH_TEST) );
     GLCall( glEnable(GL_BLEND) );
     GLCall( glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) );
@@ -127,8 +127,6 @@ int main()
 
     while (!glfwWindowShouldClose(window))
     {
-        // input
-        // -----
         glfwPollEvents();
         process_input(window);
         if (process_camera_input(window, camera)) {
@@ -181,13 +179,11 @@ int main()
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-        // -------------------------------------------------------------------------------
+        // GLFW: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         glfwSwapBuffers(window);
     }
 
-    // glfw: terminate, clearing all previously allocated GLFW resources.
-    // ------------------------------------------------------------------
+    // GLFW: terminate, clearing all previously allocated GLFW resources.
     glfwTerminate();
     return 0;
 }
