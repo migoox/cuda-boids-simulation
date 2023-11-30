@@ -98,8 +98,8 @@ int main()
 
     boids::Boids boids;
     boids::rand_aquarium_positions(sim_params, boids.position);
-    boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
-    boids::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
+    boids::cpu::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
+    boids::cpu::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
 
     common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
     boids_sp.bind();
@@ -168,9 +168,9 @@ int main()
         // Get the delta time in seconds
         float dt_as_seconds = delta_time.count();
 
-        boids::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, dt_as_seconds);
-        boids::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
-        boids::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
+        boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, dt_as_seconds);
+        boids::cpu::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
+        boids::cpu::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

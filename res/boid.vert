@@ -14,6 +14,7 @@ uniform mat4 u_projection_view;
 void main()
 {
     mat4 model_matrix = mat4(vec4(u_right[gl_InstanceID], 0.), vec4(u_up[gl_InstanceID], 0.), vec4(u_forward[gl_InstanceID], 0.), vec4(u_position[gl_InstanceID], 1.));
+//    mat4 model_matrix = mat4(vec4(1., .0, .0, 0.), vec4(0., 1., 0., 0.), vec4(0., 0., 1., 0.), vec4(u_position[gl_InstanceID], 1.));
 
     vec4 pos = vec4(a_pos, 1.);
     gl_Position = u_projection_view * model_matrix * pos;
