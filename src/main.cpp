@@ -7,11 +7,13 @@
 #include "vendor/imgui/imgui.h"
 
 #include "shader_program.hpp"
-#include "boids.hpp"
 #include "camera.hpp"
 #include "gl_debug.h"
 #include "primitives.h"
+
+#include "boids.hpp"
 #include "boids_cpu.hpp"
+#include "boids_cuda.h"
 
 #include <iostream>
 #include <chrono>
@@ -102,6 +104,8 @@ int main()
     boids::Boids boids;
     boids::rand_aquarium_positions(sim_params, boids.position);
     boids::cpu::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
+
+    boids::cuda::GPUBoids gpu_boids = boids::cuda::GPUBoids(boids);
 
     common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
     boids_sp.bind();

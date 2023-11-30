@@ -119,7 +119,7 @@ GLuint common::ShaderProgram::compile_shader(GLenum type, const std::string &sou
     // Error handling
     int result;
     GLCall( glGetShaderiv(id, GL_COMPILE_STATUS, &result) );
-    std::cerr << "[Shader Compiler]: " << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shader compile status: " << result << std::endl;
+    std::cout << "[Shader Compiler]: " << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shader compile status: " << result << std::endl;
     if ( result == GL_FALSE )
     {
         int length;
