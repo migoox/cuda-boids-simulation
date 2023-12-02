@@ -13,7 +13,7 @@
 
 #include "boids.hpp"
 #include "boids_cpu.hpp"
-#include "boids_cuda.h"
+#include "boids_cuda.hpp"
 
 #include <iostream>
 #include <chrono>
@@ -27,10 +27,8 @@ bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera);
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
-int main()
-{
-    // glfw: initialize and configure
-    // ------------------------------
+int main() {
+    // GLFW: initialize and configure
     glfwInit();
 
     // Decide GL+GLSL versions
@@ -149,12 +147,12 @@ int main()
             ImGui::Begin("Simulation parameters");
             ImGui::Text("Simulation average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
-            ImGui::SliderFloat("View radius", &sim_params.distance, 0.0f, 100.0f);
+            ImGui::SliderFloat("View radius", &sim_params.distance, boids::SimulationParameters::MIN_DISTANCE, 100.0f);
             ImGui::SliderFloat("Separation", &sim_params.separation, 0.0f, 5.0f);
             ImGui::SliderFloat("Alignment", &sim_params.alignment, 0.0f, 5.0f);
             ImGui::SliderFloat("Cohesion", &sim_params.cohesion, 0.0f, 5.0f);
-            ImGui::SliderFloat("Min speed", &sim_params.min_speed, 0.0f, 5.0f);
-            ImGui::SliderFloat("Max speed", &sim_params.max_speed, 0.0f, 5.0f);
+            ImGui::SliderFloat("Min speed", &sim_params.min_speed, 0.0f, sim_params.max_speed);
+            ImGui::SliderFloat("Max speed", &sim_params.max_speed, sim_params.min_speed, boids::SimulationParameters::MAX_SPEED);
             ImGui::SliderFloat("Noise", &sim_params.noise, 0.0f, 5.0f);
 
             ImGui::End();
@@ -169,15 +167,16 @@ int main()
 
         // Get the delta time in seconds
         float dt_as_seconds = delta_time.count();
-
-        boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, dt_as_seconds);
-        boids::cpu::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
+        gpu_boids.update_simulation_with_sort(sim_params, boids, dt_as_seconds);
         boids::cpu::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
+
+//        boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, dt_as_seconds);
+//        boids::cpu::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
+//        boids::cpu::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Draw triangle
         boids_renderer.draw(boids_sp);
         aquarium.draw(basic_sp);
 

@@ -46,26 +46,25 @@ void boids::cpu::update_simulation_naive(
                           &velocity = std::as_const(velocity),
                           &position = std::as_const(position),
                           &sim_params = std::as_const(sim_params)
-                  ](size_t boid_id) {
+                  ](size_t b_id) {
                       glm::vec3 separation(0.);
                       glm::vec3 avg_vel(0.);
                       glm::vec3 avg_pos(0.);
                       uint32_t neighbors_count = 0;
 
-                      for (BoidId j = 0; j < SimulationParameters::MAX_BOID_COUNT; ++j) {
-                          if (boid_id == j) {
+                      for (BoidId other_id = 0; other_id < SimulationParameters::MAX_BOID_COUNT; ++other_id) {
+                          if (other_id == b_id) {
                               continue;
                           }
 
-                          // Skip if boid is not in the field of view
-                          auto distance = glm::distance(position[boid_id], position[j]);
-                          if (distance > sim_params.distance) {
+                          auto distance2 = glm::dot(position[b_id] - position[other_id], position[b_id] - position[other_id]);
+                          if (distance2 > sim_params.distance * sim_params.distance) {
                               continue;
                           }
 
-                          separation += glm::normalize(position[boid_id] - position[j]) * sim_params.separation / distance / distance;
-                          avg_vel += velocity[j];
-                          avg_pos += position[j];
+                          separation += glm::normalize(position[b_id] - position[other_id]) / distance2;
+                          avg_vel += velocity[other_id];
+                          avg_pos += position[other_id];
 
                           ++neighbors_count;
                       }
@@ -76,13 +75,11 @@ void boids::cpu::update_simulation_naive(
                       }
 
                       // Final acceleration of the current boid
-                      acceleration[boid_id] =
+                      acceleration[b_id] =
                               sim_params.separation * separation +
-                              sim_params.alignment * (avg_vel - velocity[boid_id]) +
-                              sim_params.cohesion * (avg_pos - position[boid_id]) +
+                              sim_params.alignment * (avg_vel - velocity[b_id]) +
+                              sim_params.cohesion * (avg_pos - position[b_id]) +
                               sim_params.noise * rand_unit_vec();
-
-                      acceleration[boid_id] = 1.f * acceleration[boid_id];
                   }
     );
 

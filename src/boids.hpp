@@ -7,7 +7,7 @@
 #include "primitives.h"
 
 namespace boids {
-    using BoidId = size_t;
+    using BoidId = uint32_t;
 
     class SimulationParameters {
     public:
@@ -22,6 +22,7 @@ namespace boids {
         constexpr static const size_t MAX_AQUARIUM_SIZE_Z = 100;
 
         constexpr static const float MIN_DISTANCE = 0.5f;
+        constexpr static const float MAX_SPEED = 5.f;
 
         // This formula works as long as MIN_DISTANCE = 0.5f
         constexpr static const size_t MAX_CELL_COUNT = MAX_AQUARIUM_SIZE_X * MAX_AQUARIUM_SIZE_Y * MAX_AQUARIUM_SIZE_Z;

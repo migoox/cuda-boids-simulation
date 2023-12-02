@@ -1,6 +1,6 @@
 #version 330 core
 // TODO: inject boids count during parsing
-#define BOIDS_COUNT 500
+#define BOIDS_COUNT 1000
 
 layout (location = 0) in vec3 a_pos;
 
