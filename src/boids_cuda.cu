@@ -7,7 +7,6 @@
 #include <curand_kernel.h>
 #include <cuda_gl_interop.h>
 
-
 using namespace boids::cuda;
 using namespace boids;
 

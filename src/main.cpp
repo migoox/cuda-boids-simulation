@@ -26,6 +26,12 @@ bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera);
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
+enum Solution {
+    CPUNaive,
+    GPUCUDANaive,
+    GPUCUDASort
+};
+
 int main() {
     // GLFW: initialize and configure
     glfwInit();
@@ -95,11 +101,15 @@ int main() {
     common::ShaderProgram boids_sp("../res/boid.vert", "../res/boid.frag");
     common::ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
 
+    Solution curr_solution = Solution::GPUCUDASort;
+
     boids::SimulationParameters sim_params;
     boids::SimulationParameters new_sim_params;
-    sim_params.aquarium_size.x = 380.f;
-    sim_params.aquarium_size.y = 380.f;
-    sim_params.aquarium_size.z = 380.f;
+    sim_params.aquarium_size.x = 20.f;
+    sim_params.aquarium_size.y = 20.f;
+    sim_params.aquarium_size.z = 20.f;
+    sim_params.boids_count = 100;
+    curr_solution = Solution::CPUNaive;
     boids::BoidsRenderer boids_renderer;
     boids::Boids boids(sim_params);
     boids_renderer.set_ubo(boids.position, boids.orientation);
@@ -143,8 +153,8 @@ int main() {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
         {
+            static const char* items[] = { "CPU: Naive", "GPU CUDA: Naive", "GPU CUDA: Sort"};
             ImGui::Begin("Simulation");
 
             // Display floating text
@@ -153,17 +163,31 @@ int main() {
 
             // Display floating text
             ImGui::Text("%.1f FPS", io.Framerate);
+            ImGui::Text("Solution: %s", items[curr_solution]);
             ImGui::Text("Boids count: %d", sim_params.boids_count);
             ImGui::Text("Aquarium size: (%.2f, %.2f, %2.f)", sim_params.aquarium_size.x, sim_params.aquarium_size.y, sim_params.aquarium_size.z);
 
             ImGui::End();
 
             if (ImGui::CollapsingHeader("New", ImGuiTreeNodeFlags_DefaultOpen)) {
+                static Solution curr_item = curr_solution;
+
                 if (ImGui::Button("Start")) {
+                    curr_solution = curr_item;
                     sim_params.aquarium_size = new_sim_params.aquarium_size;
                     sim_params.boids_count = new_sim_params.boids_count;
-                    gpu_boids.reset(sim_params);
+
+                    basic_sp.bind();
+                    basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
+
+                    if (curr_item == Solution::CPUNaive) {
+                        boids.reset(sim_params);
+                    } else {
+                        gpu_boids.reset(sim_params);
+                    }
                 }
+
+                ImGui::Combo("Solution", reinterpret_cast<int *>(&curr_item), items, IM_ARRAYSIZE(items));
 
                 ImGui::SliderInt("Boids count", &new_sim_params.boids_count, 0, 50000);
                 ImGui::SliderFloat("Aquarium size X", &new_sim_params.aquarium_size.x, 10.f, boids::SimulationParameters::MAX_AQUARIUM_SIZE_X);
@@ -181,7 +205,6 @@ int main() {
                 ImGui::SliderFloat("Noise", &sim_params.noise, 0.0f, 5.0f);
             }
 
-
             ImGui::End();
         }
 
@@ -194,8 +217,14 @@ int main() {
 
         // Get the delta time in seconds
         float dt_as_seconds = delta_time.count();
-        gpu_boids.update_simulation_with_sort(sim_params, boids, dt_as_seconds);
-//        boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, boids.orientation, dt_as_seconds);
+        if (curr_solution == Solution::CPUNaive) {
+            boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, boids.orientation, dt_as_seconds);
+        } else if (curr_solution == Solution::GPUCUDASort) {
+            gpu_boids.update_simulation_with_sort(sim_params, boids, dt_as_seconds);
+        } else {
+            // TODO
+            // gpu_boids.update_simulation_with_naive(sim_params, boids, dt_as_seconds);
+        }
 
         boids_renderer.set_ubo(boids.position, boids.orientation);
 
@@ -204,8 +233,7 @@ int main() {
 
         boids_renderer.draw(boids_sp, sim_params.boids_count);
 
-        basic_sp.bind();
-        basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
+
         aquarium.draw(basic_sp);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

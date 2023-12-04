@@ -19,9 +19,11 @@ namespace boids::cuda {
 
         void update_simulation_with_sort(const SimulationParameters& params, Boids &boids, float dt);
         void reset(const SimulationParameters& params);
+
     private:
         void init_default(const Boids& boids);
         void init_with_gl(const Boids& boids, const BoidsRenderer& renderer);
+
     private:
         glm::vec4 *m_dev_position{};
         glm::vec3 *m_dev_velocity{};

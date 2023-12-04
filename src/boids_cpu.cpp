@@ -1,5 +1,4 @@
 #include "boids_cpu.hpp"
-#include <iterator>
 #include <ranges>
 #include <vector>
 #include <execution>
@@ -12,7 +11,7 @@ void boids::cpu::update_simulation_naive(
         boids::BoidsOrientation& orientation,
         float dt
 ) {
-    std::ranges::iota_view indexes((size_t)0, (size_t)SimulationParameters::MAX_BOID_COUNT);
+    std::ranges::iota_view indexes((size_t)0, (size_t)sim_params.boids_count);
     std::for_each(std::execution::par, indexes.begin(), indexes.end(),
                   [&acceleration,
                           &velocity = std::as_const(velocity),
@@ -24,7 +23,7 @@ void boids::cpu::update_simulation_naive(
                       glm::vec3 avg_pos(0.);
                       uint32_t neighbors_count = 0;
 
-                      for (BoidId other_id = 0; other_id < SimulationParameters::MAX_BOID_COUNT; ++other_id) {
+                      for (BoidId other_id = 0; other_id < sim_params.boids_count; ++other_id) {
                           if (other_id == b_id) {
                               continue;
                           }
@@ -55,10 +54,9 @@ void boids::cpu::update_simulation_naive(
                   }
     );
 
-    // TODO: Parametrize wall and wall_force values
     float wall = 4.f;
     float wall_acc = 15.f;
-    for (BoidId i = 0; i < SimulationParameters::MAX_BOID_COUNT; ++i) {
+    for (BoidId i = 0; i < sim_params.boids_count; ++i) {
         if (position[i].x > sim_params.aquarium_size.x / 2.f - wall) {
             auto intensity = std::abs((sim_params.aquarium_size.x / 2.f - wall - position[i].x) / wall);
             acceleration[i] += intensity * glm::vec3(-wall_acc, 0.f, 0.f);
@@ -94,7 +92,7 @@ void boids::cpu::update_simulation_naive(
     }
 
     // Update basis vectors (orientation)
-    for (BoidId i = 0; i < SimulationParameters::MAX_BOID_COUNT; ++i) {
+    for (BoidId i = 0; i < sim_params.boids_count; ++i) {
         orientation.forward[i] = glm::vec4(glm::normalize(velocity[i]), 0.f);
         orientation.right[i] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orientation.up[i]), glm::vec3(orientation.forward[i]))), 0.f);
         orientation.up[i] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orientation.forward[i]) , glm::vec3(orientation.right[i]))), 0.f);
