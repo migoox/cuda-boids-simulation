@@ -5,6 +5,8 @@
 #include <thrust/execution_policy.h>
 #include <iostream>
 #include <curand_kernel.h>
+#include <cuda_gl_interop.h>
+
 
 using namespace boids::cuda;
 using namespace boids;
@@ -60,6 +62,27 @@ void check_cuda_error(const cudaError_t &cuda_status, const char *msg) {
 };
 
 GPUBoids::GPUBoids(const boids::Boids& boids, const boids::BoidsRenderer& renderer) {
+    cudaError_t cuda_err;
+    int gl_device_id;
+    unsigned int gl_device_count;
+    // Try to find and set opengl device
+    cuda_err = cudaGLGetDevices(&gl_device_count,&gl_device_id,1,cudaGLDeviceListAll);
+    cuda_err = cudaSetDevice(gl_device_id);
+    if (cuda_err == cudaSuccess) {
+        std::cout << "[CUDA] Found cuda device attached to the current OpenGL context: " << gl_device_id << ". GL buffers are going to be registered.\n";
+        // TODO: register gl buffers
+        this->init_default(boids);
+    } else {
+        std::cout << "[CUDA]: Couldn't find any cuda device attached to teh current OpenGL context, GL buffers aren't going to be registered.\n";
+        this->init_default(boids);
+    }
+}
+
+GPUBoids::GPUBoids(const Boids &boids) {
+    this->init_default(boids);
+}
+
+void GPUBoids::init_default(const Boids& boids) {
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
     for (int i = 0; i < deviceCount; ++i) {
@@ -104,9 +127,55 @@ GPUBoids::GPUBoids(const boids::Boids& boids, const boids::BoidsRenderer& render
 
     // Setup curand
     setup_curand<<<1024,SimulationParameters::MAX_BOID_COUNT / 1024 + 1>>>(SimulationParameters::MAX_BOID_COUNT);
-
-
 }
+
+void GPUBoids::init_with_gl(const Boids &boids, const BoidsRenderer &renderer) {
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    for (int i = 0; i < deviceCount; ++i) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, i);
+        printf("[CUDA] Device %d: Compute Capability %d.%d\n", i, prop.major, prop.minor);
+    }
+
+    // Allocate memory on the device using cudaMalloc
+    size_t array_size_vec3 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec3);
+    size_t array_size_vec4 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec4);
+
+    // Malloc and send boids data
+    cudaError_t cuda_status;
+//    cuda_status = cudaMalloc((void**)&m_dev_position, array_size_vec4);
+//    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_velocity, array_size_vec3);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_acceleration, array_size_vec3);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+//    cuda_status = cudaMalloc((void**)&m_dev_orient, sizeof(BoidsOrientation));
+//    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+
+//    cuda_status = cudaMemcpy(m_dev_position, boids.position, array_size_vec4, cudaMemcpyHostToDevice);
+//    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(m_dev_velocity, boids.velocity, array_size_vec3, cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(m_dev_acceleration, boids.acceleration, array_size_vec3, cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+//    cuda_status = cudaMemcpy(m_dev_orient, &boids.orientation, sizeof(BoidsOrientation), cudaMemcpyHostToDevice);
+//    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+
+    // Prepare simulation params container
+    cuda_status = cudaMalloc((void**)&m_dev_sim_params, sizeof(SimulationParameters));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed ");
+
+    // Prepare boid_id and cell_id
+    cuda_status = cudaMalloc((void**)&m_dev_cell_id, SimulationParameters::MAX_BOID_COUNT * sizeof(CellId));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_boid_id, SimulationParameters::MAX_BOID_COUNT * sizeof(BoidId));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+
+    // Setup curand
+    setup_curand<<<1024,SimulationParameters::MAX_BOID_COUNT / 1024 + 1>>>(SimulationParameters::MAX_BOID_COUNT);
+}
+
 
 GPUBoids::~GPUBoids() {
     cudaFree(m_dev_position);
@@ -117,9 +186,9 @@ GPUBoids::~GPUBoids() {
     cudaFree(m_dev_boid_id);
 }
 
-__global__ void find_cell_ids(const boids::SimulationParameters *params, BoidId *boid_id, CellId *cell_id, glm::vec4 *position, size_t boids_count) {
+__global__ void find_cell_ids(const boids::SimulationParameters *params, BoidId *boid_id, CellId *cell_id, glm::vec4 *position) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
-    if (b_id >= boids_count) return;
+    if (b_id >= params->boids_count) return;
 
     boid_id[b_id] = b_id;
     cell_id[b_id] = get_flat_cell_id(params, position[b_id]);
@@ -149,9 +218,9 @@ __global__ void find_starts(BoidId *boid_id, CellId *cell_id, size_t boids_count
     }
 }
 
-__global__ void update_acceleration(const SimulationParameters *params, BoidId *boid_id, glm::vec4 *position, glm::vec3 *velocity, glm::vec3 *acceleration, size_t boids_count) {
+__global__ void update_acceleration(const SimulationParameters *params, BoidId *boid_id, glm::vec4 *position, glm::vec3 *velocity, glm::vec3 *acceleration) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
-    if (b_id >= boids_count) return;
+    if (b_id >= params->boids_count) return;
 
     glm::vec3 separation(0.);
     glm::vec3 avg_vel(0.);
@@ -250,9 +319,9 @@ __global__ void update_acceleration(const SimulationParameters *params, BoidId *
     acceleration[b_id] += glm::normalize(glm::vec3(2.f * (x - 0.5f), 2.f * (y - 0.5f), 2.f * (z - 0.5f))) * params->noise;
 }
 
-__global__ void update_simulation(const SimulationParameters *params, glm::vec4 *position, glm::vec3 *velocity, glm::vec3 *acceleration, BoidsOrientation *orient, size_t boids_count, float dt) {
+__global__ void update_simulation(const SimulationParameters *params, glm::vec4 *position, glm::vec3 *velocity, glm::vec3 *acceleration, BoidsOrientation *orient, float dt) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
-    if (b_id >= boids_count) return;
+    if (b_id >= params->boids_count) return;
 
     // TODO: Parametrize wall and wall_force values
     float wall = 4.f;
@@ -308,26 +377,26 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
 
     size_t threads_per_block = 1024;
-    size_t blocks_num = SimulationParameters::MAX_BOID_COUNT / threads_per_block + 1; // TODO
+    size_t blocks_num = params.boids_count / threads_per_block + 1;
 
     // 1.
-    find_cell_ids<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_boid_id, m_dev_cell_id, m_dev_position, SimulationParameters::MAX_BOID_COUNT);
+    find_cell_ids<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_boid_id, m_dev_cell_id, m_dev_position);
     cudaDeviceSynchronize();
 
     // 2.
-    thrust::sort_by_key(thrust::device, m_dev_cell_id, m_dev_cell_id + SimulationParameters::MAX_BOID_COUNT, m_dev_boid_id);
+    thrust::sort_by_key(thrust::device, m_dev_cell_id, m_dev_cell_id + params.boids_count, m_dev_boid_id);
     cudaDeviceSynchronize();
 
     // 3.
-    find_starts<<<blocks_num, threads_per_block>>>(m_dev_boid_id, m_dev_cell_id, SimulationParameters::MAX_BOID_COUNT);
+    find_starts<<<blocks_num, threads_per_block>>>(m_dev_boid_id, m_dev_cell_id, params.boids_count);
     cudaDeviceSynchronize();
 
     // 4.
-    update_acceleration<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_boid_id, m_dev_position, m_dev_velocity, m_dev_acceleration, SimulationParameters::MAX_BOID_COUNT);
+    update_acceleration<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_boid_id, m_dev_position, m_dev_velocity, m_dev_acceleration);
     cudaDeviceSynchronize();
 
     // 5.
-    update_simulation<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_position, m_dev_velocity, m_dev_acceleration, m_dev_orient, SimulationParameters::MAX_BOID_COUNT, dt);
+    update_simulation<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_position, m_dev_velocity, m_dev_acceleration, m_dev_orient, dt);
     cudaDeviceSynchronize();
 
     // TODO: use direct CUDA -> OPENGL
@@ -336,3 +405,46 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
     cuda_status = cudaMemcpy(&boids.orientation, m_dev_orient, arr_size, cudaMemcpyDeviceToHost);
 }
+
+__global__ void reset_simulation(const SimulationParameters *params, glm::vec4 *position, glm::vec3 *velocity, glm::vec3 *acceleration, BoidsOrientation *orient) {
+    BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (b_id >= params->boids_count) return;
+
+    curandState local_state = state[b_id];
+
+    float x = (curand_uniform(&local_state) - 0.5f) * params->aquarium_size.x;
+    float y = (curand_uniform(&local_state) - 0.5f) * params->aquarium_size.y;
+    float z = (curand_uniform(&local_state) - 0.5f) * params->aquarium_size.z;
+
+    position[b_id] = glm::vec4(x, y, z, 1.f);
+
+    orient->forward[b_id] = glm::vec4(0.f, 0.f, 1.f, 0.f);
+    orient->up[b_id] = glm::vec4(0.f, 1.f, 0.f, 0.f);
+    orient->right[b_id] = glm::vec4(1.f, 0.f, 0.f, 0.f);
+
+    x = (curand_uniform(&local_state) - 0.5f) * 2.f;
+    y = (curand_uniform(&local_state) - 0.5f) * 2.f;
+    z = (curand_uniform(&local_state) - 0.5f) * 2.f;
+
+    velocity[b_id] = glm::vec3(0.05f * glm::normalize(glm::vec3(x, y, z)));
+    acceleration[b_id] = glm::vec3(0.f);
+
+    // Update basis vectors (orientation)
+    orient->forward[b_id] = glm::vec4(glm::normalize(velocity[b_id]), 0.f);
+    orient->right[b_id] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orient->up[b_id]), glm::vec3(orient->forward[b_id]))), 0.f);
+    orient->up[b_id] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orient->forward[b_id]) , glm::vec3(orient->right[b_id]))), 0.f);
+
+    state[b_id] = local_state;
+}
+
+void GPUBoids::reset(const SimulationParameters &params) {
+    cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+
+    size_t threads_per_block = 1024;
+    size_t blocks_num = params.boids_count / threads_per_block + 1;
+
+    reset_simulation<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_position, m_dev_velocity, m_dev_acceleration, m_dev_orient);
+}
+
+

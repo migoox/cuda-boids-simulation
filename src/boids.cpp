@@ -11,7 +11,8 @@ boids::SimulationParameters::SimulationParameters()
           aquarium_size(glm::vec3(40.f, 40.f, 40.f)),
           min_speed(1.5f),
           max_speed(4.f),
-          noise(0.f)
+          noise(0.f),
+          boids_count(10000)
 { }
 
 boids::SimulationParameters::SimulationParameters(float distance, float separation, float alignment, float cohesion)
@@ -58,7 +59,7 @@ void boids::BoidsRenderer::set_ubo(
     GLCall( glBindBuffer(GL_UNIFORM_BUFFER, 0) );
 }
 
-void boids::BoidsRenderer::draw(const common::ShaderProgram& shader_program) const {
+void boids::BoidsRenderer::draw(const common::ShaderProgram &shader_program, int count) const {
     shader_program.bind();
     m_mesh.bind();
     GLCall( GLuint pos_block_index = glGetUniformBlockIndex(shader_program.get_id(), "boids_block_position") );
@@ -70,7 +71,7 @@ void boids::BoidsRenderer::draw(const common::ShaderProgram& shader_program) con
     GLCall( glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_pos_ubo_id) );
     GLCall( glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_orient_ubo_id) );
 
-    GLCall( glDrawElementsInstanced(GL_TRIANGLES, m_mesh.get_count(), GL_UNSIGNED_INT, nullptr, SimulationParameters::MAX_BOID_COUNT) );
+    GLCall( glDrawElementsInstanced(GL_TRIANGLES, m_mesh.get_count(), GL_UNSIGNED_INT, nullptr, count) );
 }
 
 boids::Boids::Boids(const boids::SimulationParameters &sim_params) {
@@ -90,9 +91,9 @@ void boids::Boids::reset(const SimulationParameters& sim_params) {
                 sim_params.aquarium_size.z / 2.f
         ), 1.f);
 
-        this->orientation.forward[i] = glm::vec4(0.f, 0.f, 1.f, 1.f);
-        this->orientation.up[i] = glm::vec4(0.f, 1.f, 0.f, 1.f);
-        this->orientation.right[i] = glm::vec4(1.f, 0.f, 0.f, 1.f);
+        this->orientation.forward[i] = glm::vec4(0.f, 0.f, 1.f, 0.f);
+        this->orientation.up[i] = glm::vec4(0.f, 1.f, 0.f, 0.f);
+        this->orientation.right[i] = glm::vec4(1.f, 0.f, 0.f, 0.f);
 
         this->velocity[i] = glm::vec4(0.05f * glm::normalize(boids::rand_vec(1., -1., 1., -1., 1., -1.)), 1.f);
         this->acceleration[i] = glm::vec4(0.f);

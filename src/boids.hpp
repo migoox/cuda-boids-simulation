@@ -17,9 +17,9 @@ namespace boids {
     public:
         constexpr static const size_t MAX_BOID_COUNT = 50000;
 
-        constexpr static const size_t MAX_AQUARIUM_SIZE_X = 500;
-        constexpr static const size_t MAX_AQUARIUM_SIZE_Y = 500;
-        constexpr static const size_t MAX_AQUARIUM_SIZE_Z = 300;
+        constexpr static const float MAX_AQUARIUM_SIZE_X = 400.f;
+        constexpr static const float MAX_AQUARIUM_SIZE_Y = 400.f;
+        constexpr static const float MAX_AQUARIUM_SIZE_Z = 400.f;
 
         constexpr static const float MIN_DISTANCE = 0.5f;
         constexpr static const float MAX_SPEED = 5.f;
@@ -28,6 +28,8 @@ namespace boids {
         constexpr static const size_t MAX_CELL_COUNT = MAX_AQUARIUM_SIZE_X * MAX_AQUARIUM_SIZE_Y * MAX_AQUARIUM_SIZE_Z;
 
     public:
+        int boids_count;
+
         float distance;
         float separation;
         float alignment;
@@ -71,7 +73,7 @@ namespace boids {
         // Initializes boids data
         BoidsRenderer();
 
-        void draw(const common::ShaderProgram &shader_program) const;
+        void draw(const common::ShaderProgram &shader_program, int count) const;
         void set_ubo(glm::vec4 *position, const BoidsOrientation &orientation);
 
     private:

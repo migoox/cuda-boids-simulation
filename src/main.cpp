@@ -27,7 +27,6 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 int main() {
-    printf("%lu", sizeof(boids::BoidsOrientation));
     // GLFW: initialize and configure
     glfwInit();
 
@@ -97,14 +96,15 @@ int main() {
     common::ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
 
     boids::SimulationParameters sim_params;
-    sim_params.aquarium_size.x = 480.f;
-    sim_params.aquarium_size.y = 480.f;
+    boids::SimulationParameters new_sim_params;
+    sim_params.aquarium_size.x = 380.f;
+    sim_params.aquarium_size.y = 380.f;
     sim_params.aquarium_size.z = 380.f;
     boids::BoidsRenderer boids_renderer;
     boids::Boids boids(sim_params);
     boids_renderer.set_ubo(boids.position, boids.orientation);
 
-    boids::cuda::GPUBoids gpu_boids = boids::cuda::GPUBoids(boids);
+    boids::cuda::GPUBoids gpu_boids = boids::cuda::GPUBoids(boids, boids_renderer);
 
     common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
     boids_sp.bind();
@@ -145,16 +145,42 @@ int main() {
         ImGui::NewFrame();
 
         {
-            ImGui::Begin("Simulation parameters");
-            ImGui::Text("Simulation average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            ImGui::Begin("Simulation");
 
-            ImGui::SliderFloat("View radius", &sim_params.distance, boids::SimulationParameters::MIN_DISTANCE, 100.0f);
-            ImGui::SliderFloat("Separation", &sim_params.separation, 0.0f, 5.0f);
-            ImGui::SliderFloat("Alignment", &sim_params.alignment, 0.0f, 5.0f);
-            ImGui::SliderFloat("Cohesion", &sim_params.cohesion, 0.0f, 5.0f);
-            ImGui::SliderFloat("Min speed", &sim_params.min_speed, 0.0f, sim_params.max_speed);
-            ImGui::SliderFloat("Max speed", &sim_params.max_speed, sim_params.min_speed, boids::SimulationParameters::MAX_SPEED);
-            ImGui::SliderFloat("Noise", &sim_params.noise, 0.0f, 5.0f);
+            // Display floating text
+            ImGui::SetNextWindowPos(ImVec2(0, 0)); // Set position for the text
+            ImGui::Begin("Floating Text", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+            // Display floating text
+            ImGui::Text("%.1f FPS", io.Framerate);
+            ImGui::Text("Boids count: %d", sim_params.boids_count);
+            ImGui::Text("Aquarium size: (%.2f, %.2f, %2.f)", sim_params.aquarium_size.x, sim_params.aquarium_size.y, sim_params.aquarium_size.z);
+
+            ImGui::End();
+
+            if (ImGui::CollapsingHeader("New", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::Button("Start")) {
+                    sim_params.aquarium_size = new_sim_params.aquarium_size;
+                    sim_params.boids_count = new_sim_params.boids_count;
+                    gpu_boids.reset(sim_params);
+                }
+
+                ImGui::SliderInt("Boids count", &new_sim_params.boids_count, 0, 50000);
+                ImGui::SliderFloat("Aquarium size X", &new_sim_params.aquarium_size.x, 10.f, boids::SimulationParameters::MAX_AQUARIUM_SIZE_X);
+                ImGui::SliderFloat("Aquarium size Y", &new_sim_params.aquarium_size.y, 10.f, boids::SimulationParameters::MAX_AQUARIUM_SIZE_Y);
+                ImGui::SliderFloat("Aquarium size Z", &new_sim_params.aquarium_size.z, 10.f, boids::SimulationParameters::MAX_AQUARIUM_SIZE_Z);
+            }
+
+            if (ImGui::CollapsingHeader("Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::SliderFloat("View radius", &sim_params.distance, boids::SimulationParameters::MIN_DISTANCE, 100.0f);
+                ImGui::SliderFloat("Separation", &sim_params.separation, 0.0f, 5.0f);
+                ImGui::SliderFloat("Alignment", &sim_params.alignment, 0.0f, 5.0f);
+                ImGui::SliderFloat("Cohesion", &sim_params.cohesion, 0.0f, 5.0f);
+                ImGui::SliderFloat("Min speed", &sim_params.min_speed, 0.0f, sim_params.max_speed);
+                ImGui::SliderFloat("Max speed", &sim_params.max_speed, sim_params.min_speed, boids::SimulationParameters::MAX_SPEED);
+                ImGui::SliderFloat("Noise", &sim_params.noise, 0.0f, 5.0f);
+            }
+
 
             ImGui::End();
         }
@@ -176,7 +202,10 @@ int main() {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        boids_renderer.draw(boids_sp);
+        boids_renderer.draw(boids_sp, sim_params.boids_count);
+
+        basic_sp.bind();
+        basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
         aquarium.draw(basic_sp);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
