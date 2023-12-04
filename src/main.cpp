@@ -109,7 +109,8 @@ int main() {
     sim_params.aquarium_size.y = 20.f;
     sim_params.aquarium_size.z = 20.f;
     sim_params.boids_count = 100;
-    curr_solution = Solution::CPUNaive;
+    new_sim_params = sim_params;
+
     boids::BoidsRenderer boids_renderer;
     boids::Boids boids(sim_params);
     boids_renderer.set_ubo(boids.position, boids.orientation);

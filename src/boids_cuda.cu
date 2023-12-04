@@ -100,16 +100,16 @@ void GPUBoids::init_default(const Boids& boids) {
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
     cuda_status = cudaMalloc((void**)&m_dev_velocity, array_size_vec3);
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
-    cuda_status = cudaMalloc((void**)&m_dev_acceleration, array_size_vec3);
+    cuda_status = cudaMalloc((void**)&m_dev_position_old, array_size_vec4);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_velocity_old, array_size_vec3);
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
     cuda_status = cudaMalloc((void**)&m_dev_orient, sizeof(BoidsOrientation));
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
 
-    cuda_status = cudaMemcpy(m_dev_position, boids.position, array_size_vec4, cudaMemcpyHostToDevice);
+    cuda_status = cudaMemcpy(m_dev_position_old, boids.position, array_size_vec4, cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    cuda_status = cudaMemcpy(m_dev_velocity, boids.velocity, array_size_vec3, cudaMemcpyHostToDevice);
-    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    cuda_status = cudaMemcpy(m_dev_acceleration, boids.acceleration, array_size_vec3, cudaMemcpyHostToDevice);
+    cuda_status = cudaMemcpy(m_dev_velocity_old, boids.velocity, array_size_vec3, cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
     cuda_status = cudaMemcpy(m_dev_orient, &boids.orientation, sizeof(BoidsOrientation), cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
@@ -129,6 +129,9 @@ void GPUBoids::init_default(const Boids& boids) {
 }
 
 void GPUBoids::init_with_gl(const Boids &boids, const BoidsRenderer &renderer) {
+    // TODO
+
+
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
     for (int i = 0; i < deviceCount; ++i) {
@@ -147,16 +150,12 @@ void GPUBoids::init_with_gl(const Boids &boids, const BoidsRenderer &renderer) {
 //    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
     cuda_status = cudaMalloc((void**)&m_dev_velocity, array_size_vec3);
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
-    cuda_status = cudaMalloc((void**)&m_dev_acceleration, array_size_vec3);
-    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
 //    cuda_status = cudaMalloc((void**)&m_dev_orient, sizeof(BoidsOrientation));
 //    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
 
 //    cuda_status = cudaMemcpy(m_dev_position, boids.position, array_size_vec4, cudaMemcpyHostToDevice);
 //    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
     cuda_status = cudaMemcpy(m_dev_velocity, boids.velocity, array_size_vec3, cudaMemcpyHostToDevice);
-    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    cuda_status = cudaMemcpy(m_dev_acceleration, boids.acceleration, array_size_vec3, cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
 //    cuda_status = cudaMemcpy(m_dev_orient, &boids.orientation, sizeof(BoidsOrientation), cudaMemcpyHostToDevice);
 //    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
@@ -185,15 +184,15 @@ GPUBoids::~GPUBoids() {
     cudaFree(m_dev_boid_id);
 }
 
-__global__ void find_cell_ids(const boids::SimulationParameters *params, BoidId *boid_id, CellId *cell_id, glm::vec4 *position) {
+__global__ void ker_find_cell_ids(const boids::SimulationParameters *params, BoidId *boid_id, CellId *cell_id, glm::vec4 *position_old) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
     if (b_id >= params->boids_count) return;
 
     boid_id[b_id] = b_id;
-    cell_id[b_id] = get_flat_cell_id(params, position[b_id]);
+    cell_id[b_id] = get_flat_cell_id(params, position_old[b_id]);
 }
 
-__global__ void find_starts(BoidId *boid_id, CellId *cell_id, size_t boids_count) {
+__global__ void ker_find_starts(BoidId *boid_id, CellId *cell_id, size_t boids_count) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (k >= boids_count)  {
@@ -216,30 +215,105 @@ __global__ void find_starts(BoidId *boid_id, CellId *cell_id, size_t boids_count
         }
     }
 }
+__device__ void update_orientation(BoidsOrientation *orient, glm::vec3 *velocity, BoidId b_id) {
+    // Update orientation
+    orient->forward[b_id] = glm::vec4(glm::normalize(velocity[b_id]), 0.f);
+    orient->right[b_id] = glm::vec4(glm::normalize(
+            glm::cross(glm::vec3(orient->up[b_id]),glm::vec3(orient->forward[b_id]))
+    ), 0.f);
 
-__global__ void update_acceleration(const SimulationParameters *params, BoidId *boid_id, glm::vec4 *position, glm::vec3 *velocity, glm::vec3 *acceleration) {
+    orient->up[b_id] = glm::vec4(glm::normalize(
+            glm::cross(glm::vec3(orient->forward[b_id]),glm::vec3(orient->right[b_id]))
+    ), 0.f);
+
+}
+__device__ void update_pos_vel(
+        const SimulationParameters *params,
+        const BoidId b_id,
+        glm::vec4 *position,
+        glm::vec4 *position_old,
+        glm::vec3 *velocity,
+        glm::vec3 *velocity_old,
+        glm::vec3 acceleration,
+        BoidsOrientation *orient,
+        float dt
+) {
+    float wall = 4.f;
+    float wall_acc = 15.f;
+
+    if (position_old[b_id].x > params->aquarium_size.x / 2.f - wall) {
+        auto intensity = std::abs((params->aquarium_size.x / 2.f - wall - position_old[b_id].x) / wall);
+        acceleration += intensity * glm::vec3(-wall_acc, 0.f, 0.f);
+    } else if (position_old[b_id].x < -params->aquarium_size.x / 2.f + wall) {
+        auto intensity = std::abs((-params->aquarium_size.x / 2.f + wall - position_old[b_id].x) / wall);
+        acceleration += intensity * glm::vec3(wall_acc, 0.f, 0.f);
+    }
+
+    if (position_old[b_id].y > params->aquarium_size.y / 2.f - wall) {
+        auto intensity = std::abs((params->aquarium_size.y / 2.f - wall - position_old[b_id].y) / wall);
+        acceleration += intensity * glm::vec3(0.f, -wall_acc, 0.f);
+    } else if (position_old[b_id].y < -params->aquarium_size.y / 2.f + wall) {
+        auto intensity = std::abs((-params->aquarium_size.y / 2.f + wall - position_old[b_id].y) / wall);
+        acceleration += intensity * glm::vec3(0.f, wall_acc, 0.f);
+    }
+
+    if (position_old[b_id].z > params->aquarium_size.z / 2.f - wall) {
+        auto intensity = std::abs((params->aquarium_size.z / 2.f - wall - position_old[b_id].z) / wall);
+        acceleration += intensity * glm::vec3(0.f, 0.f, -wall_acc);
+    } else if (position_old[b_id].z < -params->aquarium_size.z / 2.f + wall) {
+        auto intensity = std::abs((-params->aquarium_size.z / 2.f + wall - position_old[b_id].z) / wall);
+        acceleration += intensity * glm::vec3(0.f, 0.f, wall_acc);
+    }
+
+    velocity[b_id] = velocity_old[b_id] + acceleration * dt;
+
+    if (glm::length(velocity[b_id]) > params->max_speed) {
+        velocity[b_id] = glm::normalize(velocity[b_id]) * params->max_speed;
+    } else if (glm::length(velocity[b_id]) < params->min_speed){
+        velocity[b_id] = glm::normalize(velocity[b_id]) * params->min_speed;
+    }
+
+    position[b_id] = position_old[b_id] + glm::vec4(velocity[b_id] * dt, 0.f);
+
+    // Update orientation
+    update_orientation(orient, velocity, b_id);
+}
+
+
+__global__ void ker_update_simulation_with_sort(
+        const SimulationParameters *params,
+        const BoidId *boid_id,
+        glm::vec4 *position,
+        glm::vec4 *position_old,
+        glm::vec3 *velocity,
+        glm::vec3 *velocity_old,
+        BoidsOrientation *orient,
+        float dt
+) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
     if (b_id >= params->boids_count) return;
+
+    glm::vec3 acceleration(0.f);
 
     glm::vec3 separation(0.);
     glm::vec3 avg_vel(0.);
     glm::vec3 avg_pos(0.);
     uint32_t neighbors_count = 0;
 
-    CellCoords cell_coords = get_cell_cords(params, position[b_id]);
+    CellCoords cell_coords = get_cell_cords(params, position_old[b_id]);
 
     CellCoord grid_size_x = std::ceil(params->aquarium_size.x / params->distance);
     CellCoord grid_size_y = std::ceil(params->aquarium_size.y / params->distance);
-    CellCoord grid_size_z = std::ceil(params->aquarium_size.y / params->distance);
+    CellCoord grid_size_z = std::ceil(params->aquarium_size.z / params->distance);
 
-    auto z_start = static_cast<CellCoord>(max(int(cell_coords.z) - 1, 0));
-    auto z_end = static_cast<CellCoord>(min(cell_coords.z + 1, grid_size_z - 1));
+    auto x_start = static_cast<CellCoord>(max(int(cell_coords.x) - 1, 0));
+    auto x_end = static_cast<CellCoord>(min(cell_coords.x + 1, grid_size_x - 1));
 
     auto y_start = static_cast<CellCoord>(max(int(cell_coords.y) - 1, 0));
     auto y_end = static_cast<CellCoord>(min(cell_coords.y + 1, grid_size_y - 1));
 
-    auto x_start = static_cast<CellCoord>(max(int(cell_coords.x) - 1, 0));
-    auto x_end = static_cast<CellCoord>(min(cell_coords.x + 1, grid_size_x - 1));
+    auto z_start = static_cast<CellCoord>(max(int(cell_coords.z) - 1, 0));
+    auto z_end = static_cast<CellCoord>(min(cell_coords.z + 1, grid_size_z - 1));
 
     for (CellCoord curr_cell_z = z_start; curr_cell_z <= z_end; ++curr_cell_z) {
         for (CellCoord curr_cell_y = y_start; curr_cell_y <= y_end; ++curr_cell_y) {
@@ -257,14 +331,14 @@ __global__ void update_acceleration(const SimulationParameters *params, BoidId *
                         continue;
                     }
 
-                    auto distance2 = glm::dot(position[b_id] - position[other_id], position[b_id] - position[other_id]);
+                    auto distance2 = glm::dot(position_old[b_id] - position_old[other_id], position_old[b_id] - position_old[other_id]);
                     if (distance2 > params->distance * params->distance) {
                         continue;
                     }
 
-                    separation += glm::vec3(glm::normalize(position[b_id] - position[other_id]) / distance2);
-                    avg_vel += velocity[other_id];
-                    avg_pos += glm::vec3(position[other_id]);
+                    separation += glm::vec3(glm::normalize(position_old[b_id] - position_old[other_id]) / distance2);
+                    avg_vel += velocity_old[other_id];
+                    avg_pos += glm::vec3(position_old[other_id]);
 
                     ++neighbors_count;
                 }
@@ -304,10 +378,10 @@ __global__ void update_acceleration(const SimulationParameters *params, BoidId *
 //    }
 
     // Final acceleration of the current boid
-    acceleration[b_id] =
+    acceleration =
             params->separation * separation +
-            params->alignment * (avg_vel - velocity[b_id]) +
-            params->cohesion * (avg_pos - glm::vec3(position[b_id]));
+            params->alignment * (avg_vel - velocity_old[b_id]) +
+            params->cohesion * (avg_pos - glm::vec3(position_old[b_id]));
 
     // Add noise
     curandState local_state = state[b_id];
@@ -315,60 +389,22 @@ __global__ void update_acceleration(const SimulationParameters *params, BoidId *
     float y = curand_uniform(&local_state);
     float z = curand_uniform(&local_state);
     state[b_id] = local_state;
-    acceleration[b_id] += glm::normalize(glm::vec3(2.f * (x - 0.5f), 2.f * (y - 0.5f), 2.f * (z - 0.5f))) * params->noise;
+    acceleration += glm::normalize(glm::vec3(2.f * (x - 0.5f), 2.f * (y - 0.5f), 2.f * (z - 0.5f))) * params->noise;
+
+    // Update pos and vel
+    update_pos_vel(
+            params,
+            b_id,
+            position,
+            position_old,
+            velocity,
+            velocity_old,
+            acceleration,
+            orient,
+            dt
+    );
 }
 
-__global__ void update_simulation(const SimulationParameters *params, glm::vec4 *position, glm::vec3 *velocity, glm::vec3 *acceleration, BoidsOrientation *orient, float dt) {
-    BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
-    if (b_id >= params->boids_count) return;
-
-    // TODO: Parametrize wall and wall_force values
-    float wall = 4.f;
-    float wall_acc = 15.f;
-    if (position[b_id].x > params->aquarium_size.x / 2.f - wall) {
-        auto intensity = std::abs((params->aquarium_size.x / 2.f - wall - position[b_id].x) / wall);
-        acceleration[b_id] += intensity * glm::vec3(-wall_acc, 0.f, 0.f);
-    } else if (position[b_id].x < -params->aquarium_size.x / 2.f + wall) {
-        auto intensity = std::abs((-params->aquarium_size.x / 2.f + wall - position[b_id].x) / wall);
-        acceleration[b_id] += intensity * glm::vec3(wall_acc, 0.f, 0.f);
-    }
-
-    if (position[b_id].y > params->aquarium_size.y / 2.f - wall) {
-        auto intensity = std::abs((params->aquarium_size.y / 2.f - wall - position[b_id].y) / wall);
-        acceleration[b_id] += intensity * glm::vec3(0.f, -wall_acc, 0.f);
-    } else if (position[b_id].y < -params->aquarium_size.y / 2.f + wall) {
-        auto intensity = std::abs((-params->aquarium_size.y / 2.f + wall - position[b_id].y) / wall);
-        acceleration[b_id] += intensity * glm::vec3(0.f, wall_acc, 0.f);
-    }
-
-    if (position[b_id].z > params->aquarium_size.z / 2.f - wall) {
-        auto intensity = std::abs((params->aquarium_size.z / 2.f - wall - position[b_id].z) / wall);
-        acceleration[b_id] += intensity * glm::vec3(0.f, 0.f, -wall_acc);
-    } else if (position[b_id].z < -params->aquarium_size.z / 2.f + wall) {
-        auto intensity = std::abs((-params->aquarium_size.z / 2.f + wall - position[b_id].z) / wall);
-        acceleration[b_id] += intensity * glm::vec3(0.f, 0.f, wall_acc);
-    }
-
-    velocity[b_id] += acceleration[b_id] * dt;
-
-    if (glm::length(velocity[b_id]) > params->max_speed) {
-        velocity[b_id] = glm::normalize(velocity[b_id]) * params->max_speed;
-    } else if (glm::length(velocity[b_id]) < params->min_speed){
-        velocity[b_id] = glm::normalize(velocity[b_id]) * params->min_speed;
-    }
-
-    position[b_id] += glm::vec4(velocity[b_id] * dt, 0.f);
-
-    // Update orientation
-    orient->forward[b_id] = glm::vec4(glm::normalize(velocity[b_id]), 0.f);
-    orient->right[b_id] = glm::vec4(glm::normalize(
-            glm::cross(glm::vec3(orient->up[b_id]),glm::vec3(orient->forward[b_id]))
-    ), 0.f);
-
-    orient->up[b_id] = glm::vec4(glm::normalize(
-            glm::cross(glm::vec3(orient->forward[b_id]),glm::vec3(orient->right[b_id]))
-    ), 0.f);
-}
 
 void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &params, Boids &boids, float dt) {
     // 1. Update simulation parameters
@@ -379,33 +415,54 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     size_t blocks_num = params.boids_count / threads_per_block + 1;
 
     // 1.
-    find_cell_ids<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_boid_id, m_dev_cell_id, m_dev_position);
+    ker_find_cell_ids<<<blocks_num, threads_per_block>>>(
+            m_dev_sim_params,
+            m_dev_boid_id,
+            m_dev_cell_id,
+            m_dev_position_old
+    );
     cudaDeviceSynchronize();
 
     // 2.
-    thrust::sort_by_key(thrust::device, m_dev_cell_id, m_dev_cell_id + params.boids_count, m_dev_boid_id);
+    thrust::sort_by_key(
+            thrust::device,
+            m_dev_cell_id,
+            m_dev_cell_id + params.boids_count,
+            m_dev_boid_id
+    );
     cudaDeviceSynchronize();
 
     // 3.
-    find_starts<<<blocks_num, threads_per_block>>>(m_dev_boid_id, m_dev_cell_id, params.boids_count);
+    ker_find_starts<<<blocks_num, threads_per_block>>>(
+            m_dev_boid_id,
+            m_dev_cell_id,
+            params.boids_count
+    );
     cudaDeviceSynchronize();
 
     // 4.
-    update_acceleration<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_boid_id, m_dev_position, m_dev_velocity, m_dev_acceleration);
+    ker_update_simulation_with_sort<<<blocks_num, threads_per_block>>>(
+            m_dev_sim_params,
+            m_dev_boid_id,
+            m_dev_position,
+            m_dev_position_old,
+            m_dev_velocity,
+            m_dev_velocity_old,
+            m_dev_orient,
+            dt
+    );
     cudaDeviceSynchronize();
 
-    // 5.
-    update_simulation<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_position, m_dev_velocity, m_dev_acceleration, m_dev_orient, dt);
-    cudaDeviceSynchronize();
-
-    // TODO: use direct CUDA -> OPENGL
-    int arr_size = sizeof(glm::vec3) * SimulationParameters::MAX_BOID_COUNT;
-    cuda_status = cudaMemcpy(boids.position, m_dev_position, arr_size, cudaMemcpyDeviceToHost);
-    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    cuda_status = cudaMemcpy(&boids.orientation, m_dev_orient, arr_size, cudaMemcpyDeviceToHost);
+    move_boids_data_to_cpu(boids);
+    swap_buffers();
 }
 
-__global__ void reset_simulation(const SimulationParameters *params, glm::vec4 *position, glm::vec3 *velocity, glm::vec3 *acceleration, BoidsOrientation *orient) {
+__global__ void ker_reset_simulation(
+        const SimulationParameters *params,
+        glm::vec4 *position_old,
+        glm::vec3 *velocity_old,
+        BoidsOrientation *orient
+) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
     if (b_id >= params->boids_count) return;
 
@@ -415,7 +472,7 @@ __global__ void reset_simulation(const SimulationParameters *params, glm::vec4 *
     float y = (curand_uniform(&local_state) - 0.5f) * params->aquarium_size.y;
     float z = (curand_uniform(&local_state) - 0.5f) * params->aquarium_size.z;
 
-    position[b_id] = glm::vec4(x, y, z, 1.f);
+    position_old[b_id] = glm::vec4(x, y, z, 1.f);
 
     orient->forward[b_id] = glm::vec4(0.f, 0.f, 1.f, 0.f);
     orient->up[b_id] = glm::vec4(0.f, 1.f, 0.f, 0.f);
@@ -425,13 +482,10 @@ __global__ void reset_simulation(const SimulationParameters *params, glm::vec4 *
     y = (curand_uniform(&local_state) - 0.5f) * 2.f;
     z = (curand_uniform(&local_state) - 0.5f) * 2.f;
 
-    velocity[b_id] = glm::vec3(0.05f * glm::normalize(glm::vec3(x, y, z)));
-    acceleration[b_id] = glm::vec3(0.f);
+    velocity_old[b_id] = glm::vec3(0.05f * glm::normalize(glm::vec3(x, y, z)));
 
     // Update basis vectors (orientation)
-    orient->forward[b_id] = glm::vec4(glm::normalize(velocity[b_id]), 0.f);
-    orient->right[b_id] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orient->up[b_id]), glm::vec3(orient->forward[b_id]))), 0.f);
-    orient->up[b_id] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orient->forward[b_id]) , glm::vec3(orient->right[b_id]))), 0.f);
+    update_orientation(orient, velocity_old, b_id);
 
     state[b_id] = local_state;
 }
@@ -443,7 +497,27 @@ void GPUBoids::reset(const SimulationParameters &params) {
     size_t threads_per_block = 1024;
     size_t blocks_num = params.boids_count / threads_per_block + 1;
 
-    reset_simulation<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_position, m_dev_velocity, m_dev_acceleration, m_dev_orient);
+    ker_reset_simulation<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_position_old, m_dev_velocity_old, m_dev_orient);
+}
+
+void GPUBoids::move_boids_data_to_cpu(Boids &boids) {
+    cudaError_t cuda_status;
+    // TODO: use direct CUDA -> OPENGL
+    cuda_status = cudaMemcpy(boids.position, m_dev_position, sizeof(glm::vec4) * SimulationParameters::MAX_BOID_COUNT, cudaMemcpyDeviceToHost);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(&boids.orientation, m_dev_orient, sizeof(BoidsOrientation), cudaMemcpyDeviceToHost);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+}
+
+void GPUBoids::swap_buffers() {
+    glm::vec4 *temp_pos = m_dev_position;
+    glm::vec3 *temp_vel = m_dev_velocity;
+
+    m_dev_position = m_dev_position_old;
+    m_dev_velocity = m_dev_velocity_old;
+
+    m_dev_position_old = temp_pos;
+    m_dev_velocity_old = temp_vel;
 }
 
 

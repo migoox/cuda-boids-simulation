@@ -24,10 +24,15 @@ namespace boids::cuda {
         void init_default(const Boids& boids);
         void init_with_gl(const Boids& boids, const BoidsRenderer& renderer);
 
+        void move_boids_data_to_cpu(Boids &boids);
+
+        void swap_buffers();
+
     private:
+        glm::vec4 *m_dev_position_old{};
+        glm::vec3 *m_dev_velocity_old{};
         glm::vec4 *m_dev_position{};
         glm::vec3 *m_dev_velocity{};
-        glm::vec3 *m_dev_acceleration{};
 
         BoidsOrientation *m_dev_orient{};
 
@@ -35,6 +40,7 @@ namespace boids::cuda {
         CellId *m_dev_cell_id;
         BoidId *m_dev_boid_id;
         SimulationParameters *m_dev_sim_params;
+
     };
 }
 
