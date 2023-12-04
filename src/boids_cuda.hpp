@@ -14,17 +14,15 @@ namespace boids::cuda {
     public:
         GPUBoids() = delete;
         ~GPUBoids();
-        explicit GPUBoids(const Boids& boids);
+        explicit GPUBoids(const Boids& boids, const BoidsRenderer& renderer);
 
         void update_simulation_with_sort(const SimulationParameters& params, Boids &boids, float dt);
     private:
-        glm::vec3 *m_dev_position{};
+        glm::vec4 *m_dev_position{};
         glm::vec3 *m_dev_velocity{};
         glm::vec3 *m_dev_acceleration{};
 
-        glm::vec3 *m_dev_forward{};
-        glm::vec3 *m_dev_up{};
-        glm::vec3 *m_dev_right{};
+        BoidsOrientation *m_dev_orient{};
 
         // cell_id -> boid_id
         CellId *m_dev_cell_id;

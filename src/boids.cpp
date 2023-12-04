@@ -40,30 +40,72 @@ boids::BoidsRenderer::BoidsRenderer()
     };
 
     m_mesh.set(vertices, sizeof(vertices), indices, sizeof(indices), 12);
+
+    GLCall( glGenBuffers(1, &m_pos_ubo_id) );
+    GLCall( glGenBuffers(1, &m_orient_ubo_id) );
+    GLCall( glBindBuffer(GL_UNIFORM_BUFFER, 0) );
+}
+
+void boids::BoidsRenderer::set_ubo(
+        glm::vec4 position[SimulationParameters::MAX_BOID_COUNT],
+        const BoidsOrientation& orientation
+) {
+    GLCall( glBindBuffer(GL_UNIFORM_BUFFER, m_pos_ubo_id) );
+    GLCall( glBufferData(GL_UNIFORM_BUFFER, SimulationParameters::MAX_BOID_COUNT * 4, position, GL_DYNAMIC_DRAW) );
+
+    GLCall( glBindBuffer(GL_UNIFORM_BUFFER, m_orient_ubo_id) );
+    GLCall( glBufferData(GL_UNIFORM_BUFFER, sizeof(boids::BoidsOrientation), &orientation, GL_DYNAMIC_DRAW) );
+    GLCall( glBindBuffer(GL_UNIFORM_BUFFER, 0) );
 }
 
 void boids::BoidsRenderer::draw(const common::ShaderProgram& shader_program) const {
     shader_program.bind();
     m_mesh.bind();
+    GLCall( GLuint pos_block_index = glGetUniformBlockIndex(shader_program.get_id(), "boids_block_position") );
+    GLCall( GLuint orient_block_index = glGetUniformBlockIndex(shader_program.get_id(), "boids_block_orientation") );
+
+    GLCall( glUniformBlockBinding(shader_program.get_id(), pos_block_index, 0) );
+    GLCall( glUniformBlockBinding(shader_program.get_id(), orient_block_index, 1) );
+
+    GLCall( glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_pos_ubo_id) );
+    GLCall( glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_orient_ubo_id) );
+
     GLCall( glDrawElementsInstanced(GL_TRIANGLES, m_mesh.get_count(), GL_UNSIGNED_INT, nullptr, SimulationParameters::MAX_BOID_COUNT) );
 }
 
-boids::Boids::Boids() {
-    this->reset();
+boids::Boids::Boids(const boids::SimulationParameters &sim_params) {
+    this->reset(sim_params);
 }
 
-void boids::Boids::reset() {
+void boids::Boids::reset(const SimulationParameters& sim_params) {
     for (int i = 0; i < SimulationParameters::MAX_BOID_COUNT; ++i) {
-        this->position[i] = boids::rand_vec(5., -5., 5., -5., 5., -5.);
-        this->forward[i] = glm::vec3(0.f, 0.f, 1.f);
-        this->up[i] = glm::vec3(0.f, 1.f, 0.f);
-        this->right[i] = glm::vec3(1.f, 0.f, 0.f);
+       this->position[i] = glm::vec4(boids::rand_vec(
+                -sim_params.aquarium_size.x / 2.f,
+                sim_params.aquarium_size.x / 2.f,
 
-        this->velocity[i] = 0.05f * glm::normalize(boids::rand_vec(1., -1., 1., -1., 1., -1.));
-        this->acceleration[i] = glm::vec3(0.f);
+                -sim_params.aquarium_size.y / 2.f,
+                sim_params.aquarium_size.y / 2.f,
+
+                -sim_params.aquarium_size.z / 2.f,
+                sim_params.aquarium_size.z / 2.f
+        ), 1.f);
+
+        this->orientation.forward[i] = glm::vec4(0.f, 0.f, 1.f, 1.f);
+        this->orientation.up[i] = glm::vec4(0.f, 1.f, 0.f, 1.f);
+        this->orientation.right[i] = glm::vec4(1.f, 0.f, 0.f, 1.f);
+
+        this->velocity[i] = glm::vec4(0.05f * glm::normalize(boids::rand_vec(1., -1., 1., -1., 1., -1.)), 1.f);
+        this->acceleration[i] = glm::vec4(0.f);
     }
-    boids::cpu::update_basis_vectors(this->velocity, this->forward, this->up, this->right);
+
+    // Update basis vectors (orientation)
+    for (BoidId i = 0; i < SimulationParameters::MAX_BOID_COUNT; ++i) {
+        orientation.forward[i] = glm::vec4(glm::normalize(velocity[i]), 0.f);
+        orientation.right[i] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orientation.up[i]), glm::vec3(orientation.forward[i]))), 0.f);
+        orientation.up[i] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orientation.forward[i]) , glm::vec3(orientation.right[i]))), 0.f);
+    }
 }
+
 
 glm::vec3 boids::rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z) {
     std::random_device rd;
@@ -77,23 +119,6 @@ glm::vec3 boids::rand_vec(float min_x, float max_x, float min_y, float max_y, fl
     float z = dist_z(gen);
 
     return {x, y, z};
-}
-
-
-
-void boids::rand_aquarium_positions(const boids::SimulationParameters &sim_params, glm::vec3 positions[SimulationParameters::MAX_BOID_COUNT]) {
-    for (BoidId i = 0; i < SimulationParameters::MAX_BOID_COUNT; ++i) {
-        positions[i] = boids::rand_vec(
-                -sim_params.aquarium_size.x / 2.f,
-                sim_params.aquarium_size.x / 2.f,
-
-                -sim_params.aquarium_size.y / 2.f,
-                sim_params.aquarium_size.y / 2.f,
-
-                -sim_params.aquarium_size.z / 2.f,
-                sim_params.aquarium_size.z / 2.f
-        );
-    }
 }
 
 glm::vec3 boids::rand_unit_vec() {

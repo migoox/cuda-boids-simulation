@@ -1,5 +1,4 @@
 #define GLM_FORCE_CUDA
-
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include "vendor/imgui/backend/imgui_impl_glfw.h"
@@ -28,6 +27,7 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 int main() {
+    printf("%lu", sizeof(boids::BoidsOrientation));
     // GLFW: initialize and configure
     glfwInit();
 
@@ -97,11 +97,12 @@ int main() {
     common::ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
 
     boids::SimulationParameters sim_params;
+    sim_params.aquarium_size.x = 480.f;
+    sim_params.aquarium_size.y = 480.f;
+    sim_params.aquarium_size.z = 380.f;
     boids::BoidsRenderer boids_renderer;
-
-    boids::Boids boids;
-    boids::rand_aquarium_positions(sim_params, boids.position);
-    boids::cpu::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
+    boids::Boids boids(sim_params);
+    boids_renderer.set_ubo(boids.position, boids.orientation);
 
     boids::cuda::GPUBoids gpu_boids = boids::cuda::GPUBoids(boids);
 
@@ -168,11 +169,9 @@ int main() {
         // Get the delta time in seconds
         float dt_as_seconds = delta_time.count();
         gpu_boids.update_simulation_with_sort(sim_params, boids, dt_as_seconds);
-        boids::cpu::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
+//        boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, boids.orientation, dt_as_seconds);
 
-//        boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, dt_as_seconds);
-//        boids::cpu::update_basis_vectors(boids.velocity, boids.forward, boids.up, boids.right);
-//        boids::cpu::update_shader(boids_sp, boids.position, boids.forward, boids.up, boids.right);
+        boids_renderer.set_ubo(boids.position, boids.orientation);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

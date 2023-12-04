@@ -13,7 +13,7 @@ common::OrbitingCamera::OrbitingCamera(glm::vec3 center, float screen_width, flo
             0.33f * glm::pi<float>(),
             screen_width / screen_height,
             0.1f,
-            500.0f
+            1800.0f
     );
     update_view_matrix();
 }

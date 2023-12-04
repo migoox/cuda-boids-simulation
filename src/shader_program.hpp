@@ -27,6 +27,8 @@ namespace common {
         void set_uniform_mat3f(const char* name, const glm::mat3& matrix);
         void set_uniform_mat4f(const char* name, const glm::mat4& matrix);
 
+        GLuint get_id() const { return m_id; }
+
     private:
         GLint get_uniform_location(const char* name);
         std::string parse_shader(const char* filepath);

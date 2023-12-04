@@ -4,40 +4,12 @@
 #include <vector>
 #include <execution>
 
-void boids::cpu::update_basis_vectors(
-        glm::vec3 velocity[SimulationParameters::MAX_BOID_COUNT],
-        glm::vec3 forward[SimulationParameters::MAX_BOID_COUNT],
-        glm::vec3 up[SimulationParameters::MAX_BOID_COUNT],
-        glm::vec3 right[SimulationParameters::MAX_BOID_COUNT]
-) {
-    for (int i = 0; i < SimulationParameters::MAX_BOID_COUNT; ++i) {
-        forward[i] = glm::normalize(velocity[i]);
-        right[i] = glm::normalize(glm::cross(up[i], forward[i]));
-        up[i] = glm::normalize(glm::cross(forward[i] , right[i]));
-    }
-}
-
-void boids::cpu::update_shader(
-        common::ShaderProgram &shader_program,
-        glm::vec3 position[SimulationParameters::MAX_BOID_COUNT],
-        glm::vec3 forward[SimulationParameters::MAX_BOID_COUNT],
-        glm::vec3 up[SimulationParameters::MAX_BOID_COUNT],
-        glm::vec3 right[SimulationParameters::MAX_BOID_COUNT]
-) {
-    shader_program.bind();
-    for (int i = 0; i < SimulationParameters::MAX_BOID_COUNT; ++i) {
-        shader_program.set_uniform_3f(("u_position[" + std::to_string(i) + "]").c_str(), position[i]);
-        shader_program.set_uniform_3f(("u_forward[" + std::to_string(i) + "]").c_str(), forward[i]);
-        shader_program.set_uniform_3f(("u_up[" + std::to_string(i) + "]").c_str(), up[i]);
-        shader_program.set_uniform_3f(("u_right[" + std::to_string(i) + "]").c_str(), right[i]);
-    }
-}
-
 void boids::cpu::update_simulation_naive(
         const SimulationParameters &sim_params,
-        glm::vec3 position[SimulationParameters::MAX_BOID_COUNT],
+        glm::vec4 position[SimulationParameters::MAX_BOID_COUNT],
         glm::vec3 velocity[SimulationParameters::MAX_BOID_COUNT],
         glm::vec3 acceleration[SimulationParameters::MAX_BOID_COUNT],
+        boids::BoidsOrientation& orientation,
         float dt
 ) {
     std::ranges::iota_view indexes((size_t)0, (size_t)SimulationParameters::MAX_BOID_COUNT);
@@ -62,9 +34,9 @@ void boids::cpu::update_simulation_naive(
                               continue;
                           }
 
-                          separation += glm::normalize(position[b_id] - position[other_id]) / distance2;
+                          separation += glm::vec3(glm::normalize(position[b_id] - position[other_id]) / distance2);
                           avg_vel += velocity[other_id];
-                          avg_pos += position[other_id];
+                          avg_pos += glm::vec3(position[other_id]);
 
                           ++neighbors_count;
                       }
@@ -78,7 +50,7 @@ void boids::cpu::update_simulation_naive(
                       acceleration[b_id] =
                               sim_params.separation * separation +
                               sim_params.alignment * (avg_vel - velocity[b_id]) +
-                              sim_params.cohesion * (avg_pos - position[b_id]) +
+                              sim_params.cohesion * (avg_pos - glm::vec3(position[b_id])) +
                               sim_params.noise * rand_unit_vec();
                   }
     );
@@ -118,6 +90,13 @@ void boids::cpu::update_simulation_naive(
             velocity[i] = glm::normalize(velocity[i]) * sim_params.min_speed;
         }
 
-        position[i] += velocity[i] * dt;
+        position[i] += glm::vec4(velocity[i] * dt, 0.f);
+    }
+
+    // Update basis vectors (orientation)
+    for (BoidId i = 0; i < SimulationParameters::MAX_BOID_COUNT; ++i) {
+        orientation.forward[i] = glm::vec4(glm::normalize(velocity[i]), 0.f);
+        orientation.right[i] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orientation.up[i]), glm::vec3(orientation.forward[i]))), 0.f);
+        orientation.up[i] = glm::vec4(glm::normalize(glm::cross(glm::vec3(orientation.forward[i]) , glm::vec3(orientation.right[i]))), 0.f);
     }
 }
