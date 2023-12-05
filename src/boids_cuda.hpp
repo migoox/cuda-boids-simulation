@@ -42,6 +42,10 @@ namespace boids::cuda {
         CellId *m_dev_cell_id;
         BoidId *m_dev_boid_id;
         SimulationParameters *m_dev_sim_params;
+
+        // Stores starting index of all elements in the queried cell.
+        int *m_dev_cell_start;
+        int *m_dev_cell_end;
     };
 }
 

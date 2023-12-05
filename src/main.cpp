@@ -105,10 +105,11 @@ int main() {
 
     boids::SimulationParameters sim_params;
     boids::SimulationParameters new_sim_params;
-    sim_params.aquarium_size.x = 20.f;
-    sim_params.aquarium_size.y = 20.f;
-    sim_params.aquarium_size.z = 20.f;
-    sim_params.boids_count = 100;
+    sim_params.aquarium_size.x = 10.f;
+    sim_params.aquarium_size.y = 10.f;
+    sim_params.aquarium_size.z = 10.f;
+    sim_params.boids_count = 2;
+    sim_params.distance = 7.f;
     new_sim_params = sim_params;
 
     boids::BoidsRenderer boids_renderer;

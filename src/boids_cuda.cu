@@ -12,10 +12,6 @@ using namespace boids;
 
 __device__ curandState state[SimulationParameters::MAX_BOID_COUNT];
 
-// Stores starting index of all elements in the queried cell.
-__device__ int cell_start[SimulationParameters::MAX_CELL_COUNT];
-__device__ int cell_end[SimulationParameters::MAX_CELL_COUNT];
-
 __device__ CellId flatten_coords(const SimulationParameters *sim_params, CellCoords coords) {
     CellCoord grid_size_x = std::ceil(sim_params->aquarium_size.x / sim_params->distance);
     CellCoord grid_size_y = std::ceil(sim_params->aquarium_size.y / sim_params->distance);
@@ -82,6 +78,15 @@ GPUBoids::GPUBoids(const Boids &boids) {
     this->init_default(boids);
 }
 
+__global__ void init_starts(int *cell_start, int *cell_end, size_t count) {
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= count) {
+        return;
+    }
+    cell_start[k] = 0;
+    cell_end[k] = 0;
+}
+
 void GPUBoids::init_default(const Boids& boids) {
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
@@ -125,54 +130,20 @@ void GPUBoids::init_default(const Boids& boids) {
     cuda_status = cudaMalloc((void**)&m_dev_boid_id, SimulationParameters::MAX_BOID_COUNT * sizeof(BoidId));
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
 
+    // Prepare start and end arrays
+    cuda_status = cudaMalloc((void**)&m_dev_cell_start, SimulationParameters::MAX_CELL_COUNT * sizeof(int));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_cell_end, SimulationParameters::MAX_CELL_COUNT * sizeof(int));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    init_starts<<<1024, SimulationParameters::MAX_CELL_COUNT / 1024 + 1>>>(m_dev_cell_start, m_dev_cell_end, SimulationParameters::MAX_CELL_COUNT);
+
     // Setup curand
     setup_curand<<<1024,SimulationParameters::MAX_BOID_COUNT / 1024 + 1>>>(SimulationParameters::MAX_BOID_COUNT);
 }
 
 void GPUBoids::init_with_gl(const Boids &boids, const BoidsRenderer &renderer) {
     // TODO
-
-
-    int deviceCount;
-    cudaGetDeviceCount(&deviceCount);
-    for (int i = 0; i < deviceCount; ++i) {
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, i);
-        printf("[CUDA] Device %d: Compute Capability %d.%d\n", i, prop.major, prop.minor);
-    }
-
-    // Allocate memory on the device using cudaMalloc
-    size_t array_size_vec3 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec3);
-    size_t array_size_vec4 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec4);
-
-    // Malloc and send boids data
-    cudaError_t cuda_status;
-//    cuda_status = cudaMalloc((void**)&m_dev_position, array_size_vec4);
-//    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
-    cuda_status = cudaMalloc((void**)&m_dev_velocity, array_size_vec3);
-    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
-//    cuda_status = cudaMalloc((void**)&m_dev_orient, sizeof(BoidsOrientation));
-//    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
-
-//    cuda_status = cudaMemcpy(m_dev_position, boids.position, array_size_vec4, cudaMemcpyHostToDevice);
-//    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    cuda_status = cudaMemcpy(m_dev_velocity, boids.velocity, array_size_vec3, cudaMemcpyHostToDevice);
-    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-//    cuda_status = cudaMemcpy(m_dev_orient, &boids.orientation, sizeof(BoidsOrientation), cudaMemcpyHostToDevice);
-//    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-
-    // Prepare simulation params container
-    cuda_status = cudaMalloc((void**)&m_dev_sim_params, sizeof(SimulationParameters));
-    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed ");
-
-    // Prepare boid_id and cell_id
-    cuda_status = cudaMalloc((void**)&m_dev_cell_id, SimulationParameters::MAX_BOID_COUNT * sizeof(CellId));
-    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
-    cuda_status = cudaMalloc((void**)&m_dev_boid_id, SimulationParameters::MAX_BOID_COUNT * sizeof(BoidId));
-    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
-
-    // Setup curand
-    setup_curand<<<1024,SimulationParameters::MAX_BOID_COUNT / 1024 + 1>>>(SimulationParameters::MAX_BOID_COUNT);
+    std::terminate();
 }
 
 
@@ -193,7 +164,7 @@ __global__ void ker_find_cell_ids(const boids::SimulationParameters *params, Boi
     cell_id[b_id] = get_flat_cell_id(params, position_old[b_id]);
 }
 
-__global__ void ker_find_starts(BoidId *boid_id, CellId *cell_id, size_t boids_count) {
+__global__ void ker_find_starts(BoidId *boid_id, CellId *cell_id, int *cell_start, int *cell_end, size_t boids_count) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (k >= boids_count)  {
@@ -208,13 +179,24 @@ __global__ void ker_find_starts(BoidId *boid_id, CellId *cell_id, size_t boids_c
     if (k < boids_count - 1) {
        if (cell_id[k] != cell_id[k + 1]) {
            cell_start[cell_id[k + 1]] = k + 1;
-           cell_end[cell_id[k]] = k;
+           cell_end[cell_id[k]] = k + 1;
        }
     } else {
         if (k == boids_count - 1) {
-            cell_end[cell_id[k]] = k;
+            cell_end[cell_id[k]] = k + 1;
         }
     }
+}
+
+
+__global__ void ker_clear_starts(CellId *cell_id, int *cell_start, int *cell_end, size_t boids_count) {
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= boids_count) {
+        return;
+    }
+
+    cell_start[cell_id[k]] = 0;
+    cell_end[cell_id[k]] = 0;
 }
 
 __device__ void update_orientation(BoidsOrientation *orient, glm::vec3 *velocity, BoidId b_id) {
@@ -354,6 +336,8 @@ __global__ void ker_update_simulation_naive(
 __global__ void ker_update_simulation_with_sort(
         const SimulationParameters *params,
         const BoidId *boid_id,
+        const int *cell_start,
+        const int *cell_end,
         glm::vec4 *position,
         glm::vec4 *position_old,
         glm::vec3 *velocity,
@@ -396,8 +380,9 @@ __global__ void ker_update_simulation_with_sort(
                         curr_cell_z
                 );
 
-                for (int k = cell_start[curr_flat_id]; k <= cell_end[curr_flat_id]; ++k) {
+                for (int k = cell_start[curr_flat_id]; k < cell_end[curr_flat_id]; ++k) {
                     BoidId other_id = boid_id[k];
+
                     if (other_id == b_id) {
                         continue;
                     }
@@ -417,7 +402,6 @@ __global__ void ker_update_simulation_with_sort(
         }
     }
 
-    printf("%d\n", neighbors_count);
     if (neighbors_count > 0) {
         avg_vel /= float(neighbors_count);
         avg_pos /= float(neighbors_count);
@@ -504,6 +488,8 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     ker_find_starts<<<blocks_num, threads_per_block>>>(
             m_dev_boid_id,
             m_dev_cell_id,
+            m_dev_cell_start,
+            m_dev_cell_end,
             params.boids_count
     );
     cudaDeviceSynchronize();
@@ -512,12 +498,23 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     ker_update_simulation_with_sort<<<blocks_num, threads_per_block>>>(
             m_dev_sim_params,
             m_dev_boid_id,
+            m_dev_cell_start,
+            m_dev_cell_end,
             m_dev_position,
             m_dev_position_old,
             m_dev_velocity,
             m_dev_velocity_old,
             m_dev_orient,
             dt
+    );
+    cudaDeviceSynchronize();
+
+    // 5.
+    ker_clear_starts<<<blocks_num, threads_per_block>>>(
+            m_dev_cell_id,
+            m_dev_cell_start,
+            m_dev_cell_end,
+            params.boids_count
     );
     cudaDeviceSynchronize();
 
