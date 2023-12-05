@@ -103,13 +103,12 @@ int main() {
 
     Solution curr_solution = Solution::GPUCUDASort;
 
-    boids::SimulationParameters sim_params;
+    boids::SimulationParameters sim_params(4.5f, 0.85f, 2.f, 1.4f);
     boids::SimulationParameters new_sim_params;
-    sim_params.aquarium_size.x = 200.f;
-    sim_params.aquarium_size.y = 200.f;
-    sim_params.aquarium_size.z = 200.f;
+    sim_params.aquarium_size.x = 90.f;
+    sim_params.aquarium_size.y = 90.f;
+    sim_params.aquarium_size.z = 90.f;
     sim_params.boids_count = 10000;
-    sim_params.distance = 7.f;
     new_sim_params = sim_params;
 
     boids::BoidsRenderer boids_renderer;
