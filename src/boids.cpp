@@ -125,3 +125,29 @@ glm::vec3 boids::rand_vec(float min_x, float max_x, float min_y, float max_y, fl
 glm::vec3 boids::rand_unit_vec() {
     return glm::normalize(rand_vec(-1.f, 1.f, -1.f, 1.f, -1.f, 1.f));
 }
+
+boids::Obstacles::Obstacles()
+: m_radius(), m_pos() {
+    m_radius.reserve(SimulationParameters::MAX_OBSTACLES_COUNT);
+    m_pos.reserve(SimulationParameters::MAX_OBSTACLES_COUNT);
+}
+
+void boids::Obstacles::push(glm::vec3 pos, float radius) {
+    if (m_radius.size() < SimulationParameters::MAX_OBSTACLES_COUNT) {
+        m_radius.push_back(radius);
+        m_pos.push_back(pos);
+    }
+}
+
+void boids::Obstacles::remove(size_t elem) {
+    m_radius.erase(m_radius.begin() + elem);
+    m_pos.erase(m_pos.begin() + elem);
+}
+
+float &boids::Obstacles::radius(size_t elem) {
+    return m_radius[elem];
+}
+
+glm::vec3 &boids::Obstacles::pos(size_t elem) {
+    return m_pos[elem];
+}

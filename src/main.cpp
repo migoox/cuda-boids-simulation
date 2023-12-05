@@ -22,6 +22,7 @@
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void process_input(GLFWwindow *window);
 bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera);
+bool list_view_getter(void* data, int index, const char** output);
 
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
@@ -109,6 +110,8 @@ int main() {
     sim_params.aquarium_size.z = 90.f;
     sim_params.boids_count = 10000;
     new_sim_params = sim_params;
+
+    boids::Obstacles obstacles;
 
     boids::BoidsRenderer boids_renderer;
     boids::Boids boids(sim_params);
@@ -205,6 +208,43 @@ int main() {
                 ImGui::SliderFloat("Noise", &sim_params.noise, 0.0f, 5.0f);
             }
 
+            if (ImGui::CollapsingHeader("Obstacles", ImGuiTreeNodeFlags_DefaultOpen)) {
+                static int selected_list_item = -1; // Index of the selected item (-1 means no item is selected)
+
+                if (ImGui::Button("Add")) {
+                    obstacles.push(glm::vec3(0.f, 0.f, 0.f), 5.f);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Remove")) {
+                    if (selected_list_item >= 0 && obstacles.count() > 0) {
+                        obstacles.remove(selected_list_item);
+                    }
+                }
+
+                if (obstacles.count() > 0) {
+                    ImGui::ListBox(
+                            "##List of obstacles",
+                            &selected_list_item,
+                            list_view_getter,
+                            (void*)obstacles.get_pos_array(),
+                            obstacles.count()
+                    );
+                }
+
+                if (selected_list_item >= 0) {
+                    glm::vec3 pos = obstacles.pos(selected_list_item);
+                    float pos_array[3] = { pos.x, pos.y, pos.z };
+                    ImGui::InputFloat3("Position", pos_array);
+                    obstacles.pos(selected_list_item).x = pos_array[0];
+                    obstacles.pos(selected_list_item).y = pos_array[1];
+                    obstacles.pos(selected_list_item).z = pos_array[2];
+
+                    float radius = obstacles.radius(selected_list_item);
+                    ImGui::InputFloat("Radius", &radius);
+                    obstacles.radius(selected_list_item) = radius;
+                }
+            }
+
             ImGui::End();
         }
 
@@ -295,3 +335,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
+bool list_view_getter(void* data, int index, const char** output) {
+    *output = ("Obstacle " + std::to_string(index)).c_str();
+    return true;
+}
