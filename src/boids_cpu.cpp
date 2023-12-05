@@ -42,15 +42,16 @@ void boids::cpu::update_simulation_naive(
 
                       if (neighbors_count > 0) {
                           avg_vel /= float(neighbors_count);
-                          avg_pos /= float(neighbors_count);
-                      }
 
-                      // Final acceleration of the current boid
-                      acceleration[b_id] =
-                              sim_params.separation * separation +
-                              sim_params.alignment * (avg_vel - velocity[b_id]) +
-                              sim_params.cohesion * (avg_pos - glm::vec3(position[b_id])) +
-                              sim_params.noise * rand_unit_vec();
+                          avg_pos /= float(neighbors_count);
+
+                          // Final acceleration of the current boid
+                          acceleration[b_id] =
+                                  sim_params.separation * separation +
+                                  sim_params.alignment * (avg_vel - velocity[b_id]) +
+                                  sim_params.cohesion * (avg_pos - glm::vec3(position[b_id]));
+                      }
+                      acceleration[b_id] += sim_params.noise * rand_unit_vec();
                   }
     );
 

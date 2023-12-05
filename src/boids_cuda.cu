@@ -53,6 +53,7 @@ __global__ void setup_curand(size_t max_boid_count) {
 
     curand_init(1234, id, 0, &state[id]);
 }
+
 void check_cuda_error(const cudaError_t &cuda_status, const char *msg) {
     if (cuda_status != cudaSuccess) {
         std::cerr << msg << cudaGetErrorString(cuda_status) << std::endl;
@@ -215,6 +216,7 @@ __global__ void ker_find_starts(BoidId *boid_id, CellId *cell_id, size_t boids_c
         }
     }
 }
+
 __device__ void update_orientation(BoidsOrientation *orient, glm::vec3 *velocity, BoidId b_id) {
     // Update orientation
     orient->forward[b_id] = glm::vec4(glm::normalize(velocity[b_id]), 0.f);
@@ -227,6 +229,7 @@ __device__ void update_orientation(BoidsOrientation *orient, glm::vec3 *velocity
     ), 0.f);
 
 }
+
 __device__ void update_pos_vel(
         const SimulationParameters *params,
         const BoidId b_id,
@@ -279,6 +282,74 @@ __device__ void update_pos_vel(
     update_orientation(orient, velocity, b_id);
 }
 
+__global__ void ker_update_simulation_naive(
+        const SimulationParameters *params,
+        glm::vec4 *position,
+        glm::vec4 *position_old,
+        glm::vec3 *velocity,
+        glm::vec3 *velocity_old,
+        BoidsOrientation *orient,
+        float dt
+) {
+    BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (b_id >= params->boids_count) return;
+
+    glm::vec3 acceleration(0.f);
+
+    glm::vec3 separation(0.);
+    glm::vec3 avg_vel(0.);
+    glm::vec3 avg_pos(0.);
+    uint32_t neighbors_count = 0;
+
+    for (BoidId other_id = 0; other_id < params->boids_count; ++other_id) {
+        if (other_id == b_id) {
+            continue;
+        }
+
+        auto distance2 = glm::dot(position_old[b_id] - position_old[other_id], position_old[b_id] - position_old[other_id]);
+        if (distance2 > params->distance * params->distance) {
+            continue;
+        }
+
+        separation += glm::vec3(glm::normalize(position_old[b_id] - position_old[other_id]) / distance2);
+        avg_vel += velocity_old[other_id];
+        avg_pos += glm::vec3(position_old[other_id]);
+
+        ++neighbors_count;
+    }
+
+    if (neighbors_count > 0) {
+        avg_vel /= float(neighbors_count);
+        avg_pos /= float(neighbors_count);
+
+        // Final acceleration of the current boid
+        acceleration =
+                params->separation * separation +
+                params->alignment * (avg_vel - velocity_old[b_id]) +
+                params->cohesion * (avg_pos - glm::vec3(position_old[b_id]));
+    }
+
+    // Add noise
+    curandState local_state = state[b_id];
+    float x = curand_uniform(&local_state);
+    float y = curand_uniform(&local_state);
+    float z = curand_uniform(&local_state);
+    state[b_id] = local_state;
+    acceleration += glm::normalize(glm::vec3(2.f * (x - 0.5f), 2.f * (y - 0.5f), 2.f * (z - 0.5f))) * params->noise;
+
+    // Update pos and vel
+    update_pos_vel(
+            params,
+            b_id,
+            position,
+            position_old,
+            velocity,
+            velocity_old,
+            acceleration,
+            orient,
+            dt
+    );
+}
 
 __global__ void ker_update_simulation_with_sort(
         const SimulationParameters *params,
@@ -346,42 +417,17 @@ __global__ void ker_update_simulation_with_sort(
         }
     }
 
-    // Naive
-//    for (BoidId other_id = 0; other_id < boids_count; ++other_id) {
-//        if (other_id == b_id) {
-//            continue;
-//        }
-//
-//        auto distance2 = glm::dot(position[b_id] - position[other_id], position[b_id] - position[other_id]);
-//        if (distance2 > params->distance * params->distance) {
-//            continue;
-//        }
-//
-////        separation += glm::normalize(position[b_id] - position[other_id]) / distance2;
-////        avg_vel += velocity[other_id];
-////        avg_pos += position[other_id];
-//
-//        ++neighbors_count;
-//    }
-
+    printf("%d\n", neighbors_count);
     if (neighbors_count > 0) {
         avg_vel /= float(neighbors_count);
         avg_pos /= float(neighbors_count);
+
+        // Final acceleration of the current boid
+        acceleration =
+                params->separation * separation +
+                params->alignment * (avg_vel - velocity_old[b_id]) +
+                params->cohesion * (avg_pos - glm::vec3(position_old[b_id]));
     }
-
-     //printf("%d vs %d\n", neighbors_count, neighbors_count2);
-//    for (int i = 0; i < neighbors_count; i++) {
-//        printf("%u SORT %u\n", b_id, test[i]);
-//    }
-//    for (int i = 0; i < neighbors_count2; i++) {
-//        printf("%u NAIVE %u\n", b_id, test2[i]);
-//    }
-
-    // Final acceleration of the current boid
-    acceleration =
-            params->separation * separation +
-            params->alignment * (avg_vel - velocity_old[b_id]) +
-            params->cohesion * (avg_pos - glm::vec3(position_old[b_id]));
 
     // Add noise
     curandState local_state = state[b_id];
@@ -405,6 +451,28 @@ __global__ void ker_update_simulation_with_sort(
     );
 }
 
+void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params, Boids &boids, float dt) {
+    // 1. Update simulation parameters
+    cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+
+    size_t threads_per_block = 1024;
+    size_t blocks_num = params.boids_count / threads_per_block + 1;
+
+    ker_update_simulation_naive<<<blocks_num, threads_per_block>>>(
+            m_dev_sim_params,
+            m_dev_position,
+            m_dev_position_old,
+            m_dev_velocity,
+            m_dev_velocity_old,
+            m_dev_orient,
+            dt
+    );
+    cudaDeviceSynchronize();
+
+    move_boids_data_to_cpu(boids);
+    swap_buffers();
+}
 
 void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &params, Boids &boids, float dt) {
     // 1. Update simulation parameters

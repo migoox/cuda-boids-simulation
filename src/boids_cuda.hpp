@@ -18,6 +18,8 @@ namespace boids::cuda {
         explicit GPUBoids(const Boids& boids);
 
         void update_simulation_with_sort(const SimulationParameters& params, Boids &boids, float dt);
+        void update_simulation_naive(const SimulationParameters &params, Boids &boids, float dt);
+
         void reset(const SimulationParameters& params);
 
     private:
@@ -40,7 +42,6 @@ namespace boids::cuda {
         CellId *m_dev_cell_id;
         BoidId *m_dev_boid_id;
         SimulationParameters *m_dev_sim_params;
-
     };
 }
 

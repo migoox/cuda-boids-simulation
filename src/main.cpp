@@ -166,7 +166,7 @@ int main() {
             ImGui::Text("%.1f FPS", io.Framerate);
             ImGui::Text("Solution: %s", items[curr_solution]);
             ImGui::Text("Boids count: %d", sim_params.boids_count);
-            ImGui::Text("Aquarium size: (%.2f, %.2f, %2.f)", sim_params.aquarium_size.x, sim_params.aquarium_size.y, sim_params.aquarium_size.z);
+            ImGui::Text("Aquarium size: (%.2f, %.2f, %.2f)", sim_params.aquarium_size.x, sim_params.aquarium_size.y, sim_params.aquarium_size.z);
 
             ImGui::End();
 
@@ -223,8 +223,7 @@ int main() {
         } else if (curr_solution == Solution::GPUCUDASort) {
             gpu_boids.update_simulation_with_sort(sim_params, boids, dt_as_seconds);
         } else {
-            // TODO
-            // gpu_boids.update_simulation_with_naive(sim_params, boids, dt_as_seconds);
+            gpu_boids.update_simulation_naive(sim_params, boids, dt_as_seconds);
         }
 
         boids_renderer.set_ubo(boids.position, boids.orientation);
