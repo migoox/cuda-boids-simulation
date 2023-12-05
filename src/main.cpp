@@ -105,10 +105,10 @@ int main() {
 
     boids::SimulationParameters sim_params;
     boids::SimulationParameters new_sim_params;
-    sim_params.aquarium_size.x = 10.f;
-    sim_params.aquarium_size.y = 10.f;
-    sim_params.aquarium_size.z = 10.f;
-    sim_params.boids_count = 2;
+    sim_params.aquarium_size.x = 200.f;
+    sim_params.aquarium_size.y = 200.f;
+    sim_params.aquarium_size.z = 200.f;
+    sim_params.boids_count = 10000;
     sim_params.distance = 7.f;
     new_sim_params = sim_params;
 
@@ -191,7 +191,10 @@ int main() {
 
                 ImGui::Combo("Solution", reinterpret_cast<int *>(&curr_item), items, IM_ARRAYSIZE(items));
 
-                ImGui::SliderInt("Boids count", &new_sim_params.boids_count, 0, 50000);
+                ImGui::InputInt("Boids count", &new_sim_params.boids_count, 0, 1000, ImGuiInputTextFlags_CharsDecimal);
+                new_sim_params.boids_count = (new_sim_params.boids_count < 0) ? 0 : new_sim_params.boids_count;
+                new_sim_params.boids_count = (new_sim_params.boids_count > 50000) ? 50000 : new_sim_params.boids_count;
+
                 ImGui::SliderFloat("Aquarium size X", &new_sim_params.aquarium_size.x, 10.f, boids::SimulationParameters::MAX_AQUARIUM_SIZE_X);
                 ImGui::SliderFloat("Aquarium size Y", &new_sim_params.aquarium_size.y, 10.f, boids::SimulationParameters::MAX_AQUARIUM_SIZE_Y);
                 ImGui::SliderFloat("Aquarium size Z", &new_sim_params.aquarium_size.z, 10.f, boids::SimulationParameters::MAX_AQUARIUM_SIZE_Z);
