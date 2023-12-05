@@ -17,15 +17,19 @@ namespace boids {
     public:
         constexpr static const size_t MAX_BOID_COUNT = 50000;
 
-        constexpr static const float MAX_AQUARIUM_SIZE_X = 400.f;
-        constexpr static const float MAX_AQUARIUM_SIZE_Y = 400.f;
-        constexpr static const float MAX_AQUARIUM_SIZE_Z = 400.f;
+        constexpr static const float MAX_AQUARIUM_SIZE_X = 300.f;
+        constexpr static const float MAX_AQUARIUM_SIZE_Y = 300.f;
+        constexpr static const float MAX_AQUARIUM_SIZE_Z = 300.f;
 
         constexpr static const float MIN_DISTANCE = 0.5f;
         constexpr static const float MAX_SPEED = 5.f;
 
         // This formula works as long as MIN_DISTANCE = 0.5f
         constexpr static const size_t MAX_CELL_COUNT = MAX_AQUARIUM_SIZE_X * MAX_AQUARIUM_SIZE_Y * MAX_AQUARIUM_SIZE_Z;
+
+        constexpr static const size_t MAX_OBSTACLES_COUNT = 8;
+        constexpr static const float MAX_OBSTACLE_RADIUS = 10.f;
+        constexpr static const float MIN_OBSTACLE_RADIUS = 1.f;
 
     public:
         int boids_count;

@@ -560,8 +560,6 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     swap_buffers();
 }
 
-
-
 void GPUBoids::reset(const SimulationParameters &params) {
     cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
