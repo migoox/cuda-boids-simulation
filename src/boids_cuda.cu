@@ -182,8 +182,6 @@ __global__ void ker_clear_starts(CellId *cell_id, int *cell_start, int *cell_end
     cell_end[cell_id[k]] = 0;
 }
 
-
-
 __global__ void ker_update_simulation_naive(
         const SimulationParameters *params,
         const glm::vec3* obstacle_position,
@@ -513,7 +511,7 @@ GPUBoids::~GPUBoids() {
 void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params, const Obstacles &obstacles, Boids &boids, float dt) {
     cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    size_t threads_per_block = 1024;
+    size_t threads_per_block = 128;
     size_t blocks_num = params.boids_count / threads_per_block + 1;
 
     cuda_status = cudaMemcpy(m_dev_obstacle_position, obstacles.get_pos_array(), SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(glm::vec3), cudaMemcpyHostToDevice);
@@ -542,7 +540,7 @@ void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params
 void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &params, const Obstacles &obstacles, Boids &boids, float dt) {
     cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    size_t threads_per_block = 1024;
+    size_t threads_per_block = 128;
     size_t blocks_num = params.boids_count / threads_per_block + 1;
 
     cuda_status = cudaMemcpy(m_dev_obstacle_position, obstacles.get_pos_array(), SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(glm::vec3), cudaMemcpyHostToDevice);
