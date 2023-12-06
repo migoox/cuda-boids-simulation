@@ -98,3 +98,9 @@ void common::Box::draw(const ShaderProgram &program) const {
     m_mesh.bind();
     GLCall( glDrawElements(GL_TRIANGLES, m_mesh.get_count(), GL_UNSIGNED_INT, nullptr) );
 }
+
+void common::Box::draw_instanced(const common::ShaderProgram &program, size_t elems) const {
+    program.bind();
+    m_mesh.bind();
+    GLCall( glDrawElementsInstanced(GL_TRIANGLES, m_mesh.get_count(), GL_UNSIGNED_INT, nullptr, elems) );
+}

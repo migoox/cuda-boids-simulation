@@ -100,6 +100,7 @@ int main() {
 
     common::ShaderProgram boids_sp("../res/boid.vert", "../res/boid.frag");
     common::ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
+    common::ShaderProgram obstacles_sp("../res/obstacles.vert", "../res/basic.frag");
 
     Solution curr_solution = Solution::GPUCUDASort;
 
@@ -122,14 +123,16 @@ int main() {
     common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
     boids_sp.bind();
     boids_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
+    obstacles_sp.bind();
+    obstacles_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
     basic_sp.bind();
     basic_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
 
     common::Box aquarium;
+    basic_sp.bind();
     basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
 
     // Uncomment this call to draw in wireframe polygons.
-    GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
 
     std::chrono::steady_clock::time_point current_time = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point previous_time = current_time;
@@ -147,6 +150,8 @@ int main() {
             boids_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
             basic_sp.bind();
             basic_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
+            obstacles_sp.bind();
+            obstacles_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
         }
 
         // Start the Dear ImGui frame
@@ -270,9 +275,11 @@ int main() {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_FILL) );
+        obstacles.draw(obstacles_sp);
+
+        GLCall( glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) );
         boids_renderer.draw(boids_sp, sim_params.boids_count);
-
-
         aquarium.draw(basic_sp);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

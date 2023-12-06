@@ -112,6 +112,7 @@ __device__ void update_pos_vel(
         glm::vec3 p = glm::vec3(position_old[b_id]) + d * glm::dot(d, e);
 
         acceleration += glm::normalize(p - obstacle_position[i]) * 100.f / dist2;
+//        printf("%f, %f, %f\n", obstacle_position[i].x, obstacle_position[i].y, obstacle_position[i].z);
     }
 
     velocity[b_id] = velocity_old[b_id] + acceleration * dt;

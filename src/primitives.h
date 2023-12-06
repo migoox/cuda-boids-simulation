@@ -28,6 +28,7 @@ namespace common {
         Box();
 
         void draw(const ShaderProgram &program) const;
+        void draw_instanced(const ShaderProgram &program, size_t elems) const;
     private:
         Mesh m_mesh;
     };

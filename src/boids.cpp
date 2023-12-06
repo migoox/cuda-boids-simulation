@@ -127,7 +127,7 @@ glm::vec3 boids::rand_unit_vec() {
 }
 
 boids::Obstacles::Obstacles()
-: m_radius(), m_pos() {
+: m_radius(), m_pos(), m_box() {
     m_radius.reserve(SimulationParameters::MAX_OBSTACLES_COUNT);
     m_pos.reserve(SimulationParameters::MAX_OBSTACLES_COUNT);
 }
@@ -150,4 +150,13 @@ float &boids::Obstacles::radius(size_t elem) {
 
 glm::vec3 &boids::Obstacles::pos(size_t elem) {
     return m_pos[elem];
+}
+
+void boids::Obstacles::draw(common::ShaderProgram &program) {
+    program.bind();
+    for (int i = 0; i < m_radius.size(); ++i) {
+        program.set_uniform_3f(("u_pos[" + std::to_string(i) + "]").c_str(), m_pos[i]);
+        program.set_uniform_1f(("u_radius[" + std::to_string(i) + "]").c_str(), m_radius[i]);
+    }
+    m_box.draw_instanced(program, m_radius.size());
 }

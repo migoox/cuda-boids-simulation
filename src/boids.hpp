@@ -88,10 +88,6 @@ namespace boids {
     };
 
     class Obstacles {
-    private:
-        std::vector<float> m_radius;
-        std::vector<glm::vec3> m_pos;
-
     public:
         Obstacles();
         void push(glm::vec3 pos, float radius);
@@ -103,8 +99,14 @@ namespace boids {
         float &radius(size_t elem);
         glm::vec3 &pos(size_t elem);
 
-
         size_t count() const { return m_radius.size(); }
+
+        void draw(common::ShaderProgram& program);
+    private:
+        std::vector<float> m_radius;
+        std::vector<glm::vec3> m_pos;
+
+        common::Box m_box;
     };
 
     glm::vec3 rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
