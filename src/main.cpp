@@ -132,16 +132,12 @@ int main() {
     basic_sp.bind();
     basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
 
-    // Uncomment this call to draw in wireframe polygons.
-
     std::chrono::steady_clock::time_point current_time = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point previous_time = current_time;
 
     GLCall( glEnable(GL_DEPTH_TEST) );
     GLCall( glEnable(GL_BLEND) );
     GLCall( glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) );
-
-
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
@@ -239,14 +235,13 @@ int main() {
 
                 if (selected_list_item >= 0 && obstacles.count() > 0) {
                     glm::vec3 pos = obstacles.pos(selected_list_item);
-                    float pos_array[3] = { pos.x, pos.y, pos.z };
-                    ImGui::InputFloat3("Position", pos_array);
-                    obstacles.pos(selected_list_item).x = pos_array[0];
-                    obstacles.pos(selected_list_item).y = pos_array[1];
-                    obstacles.pos(selected_list_item).z = pos_array[2];
+                    ImGui::SliderFloat("X", &pos.x, -sim_params.aquarium_size.x / 2.f, sim_params.aquarium_size.x / 2.f);
+                    ImGui::SliderFloat("Y", &pos.y, -sim_params.aquarium_size.y / 2.f, sim_params.aquarium_size.y / 2.f);
+                    ImGui::SliderFloat("Z", &pos.z, -sim_params.aquarium_size.z / 2.f, sim_params.aquarium_size.z / 2.f);
+                    obstacles.pos(selected_list_item) = pos;
 
                     float radius = obstacles.radius(selected_list_item);
-                    ImGui::InputFloat("Radius", &radius);
+                    ImGui::SliderFloat("Radius", &radius, boids::SimulationParameters::MIN_OBSTACLE_RADIUS, boids::SimulationParameters::MAX_OBSTACLE_RADIUS);
                     obstacles.radius(selected_list_item) = radius;
                 }
             }
@@ -344,6 +339,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 }
 
 bool list_view_getter(void* data, int index, const char** output) {
+    // TODO: malloc
     *output = ("Obstacle " + std::to_string(index)).c_str();
     return true;
 }

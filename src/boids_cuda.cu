@@ -42,10 +42,6 @@ __device__ CellId get_flat_cell_id(const SimulationParameters *sim_params, const
 }
 
 __device__ void update_orientation(BoidsOrientation *orient, glm::vec3 *velocity, BoidId b_id) {
-    if (glm::dot(glm::vec3(orient->up[b_id]), glm::vec3(0.f, 1.f, 0.f)) < 0.f) {
-        orient->up[b_id] = glm::vec4(0.f, 1.f, 0.f, 0.f);
-    }
-
     // Update orientation
     orient->forward[b_id] = glm::vec4(glm::normalize(velocity[b_id]), 0.f);
     orient->right[b_id] = glm::vec4(glm::normalize(
@@ -102,16 +98,21 @@ __device__ void update_pos_vel(
 
     // Update obstacles
     for (int i = 0; i < obstacle_count; ++i) {
-        float dist2 = glm::dot(obstacle_position[i] - glm::vec3(position_old[b_id]), obstacle_position[i] - glm::vec3(position_old[b_id]));
-        if (dist2 > 4 * obstacle_radius[i] * obstacle_radius[i]) {
+        float dist = glm::distance(obstacle_position[i], glm::vec3(position_old[b_id]));
+
+        if (dist > 1.4f * obstacle_radius[i]) {
             continue;
         }
 
         glm::vec3 e = obstacle_position[i] - glm::vec3(position_old[b_id]);
         glm::vec3 d = glm::normalize(velocity_old[b_id]);
-        glm::vec3 p = glm::vec3(position_old[b_id]) + d * glm::dot(d, e);
-
-        acceleration += glm::normalize(p - obstacle_position[i]) * 100.f / dist2;
+        float de_dot = glm::dot(d, e);
+        if (de_dot < 0.f) {
+            continue;
+        }
+        glm::vec3 p = glm::vec3(position_old[b_id]) + d * de_dot;
+        float divisor = max(obstacle_radius[i] - dist, 0.02f);
+        acceleration += glm::normalize(p - obstacle_position[i]) * 12.f;
     }
 
     velocity[b_id] = velocity_old[b_id] + acceleration * dt;
