@@ -30,7 +30,8 @@ const unsigned int SCR_HEIGHT = 600;
 enum Solution {
     CPUNaive,
     GPUCUDANaive,
-    GPUCUDASort
+    GPUCUDASortVar1,
+    GPUCUDASortVar2
 };
 
 int main() {
@@ -102,7 +103,7 @@ int main() {
     common::ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
     common::ShaderProgram obstacles_sp("../res/obstacles.vert", "../res/basic.frag");
 
-    Solution curr_solution = Solution::GPUCUDASort;
+    Solution curr_solution = Solution::GPUCUDASortVar2;
 
     boids::SimulationParameters sim_params(4.5f, 0.85f, 2.f, 1.4f);
     boids::SimulationParameters new_sim_params;
@@ -156,7 +157,7 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         {
-            static const char* items[] = { "CPU: Naive", "GPU CUDA: Naive", "GPU CUDA: Sort"};
+            static const char* items[] = { "CPU: Naive", "GPU CUDA: Naive", "GPU CUDA: Sort Var1", "GPU CUDA: Sort Var2"};
             ImGui::Begin("Simulation");
 
             // Display floating text
@@ -260,8 +261,10 @@ int main() {
         float dt_as_seconds = delta_time.count();
         if (curr_solution == Solution::CPUNaive) {
             boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, boids.orientation, dt_as_seconds);
-        } else if (curr_solution == Solution::GPUCUDASort) {
-            gpu_boids.update_simulation_with_sort(sim_params, obstacles, boids, dt_as_seconds);
+        } else if (curr_solution == Solution::GPUCUDASortVar1) {
+            gpu_boids.update_simulation_with_sort(sim_params, obstacles, boids, dt_as_seconds, 0);
+        } else if (curr_solution == Solution::GPUCUDASortVar2) {
+            gpu_boids.update_simulation_with_sort(sim_params, obstacles, boids, dt_as_seconds, 1);
         } else {
             gpu_boids.update_simulation_naive(sim_params, obstacles, boids, dt_as_seconds);
         }

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <curand_kernel.h>
 #include <cuda_gl_interop.h>
+#define BLOCK_SIZE 256
 
 using namespace boids::cuda;
 using namespace boids;
@@ -111,7 +112,6 @@ __device__ void update_pos_vel(
             continue;
         }
         glm::vec3 p = glm::vec3(position_old[b_id]) + d * de_dot;
-        float divisor = max(obstacle_radius[i] - dist, 0.02f);
         acceleration += glm::normalize(p - obstacle_position[i]) * 12.f;
     }
 
@@ -124,6 +124,81 @@ __device__ void update_pos_vel(
     }
 
     position[b_id] = position_old[b_id] + glm::vec4(velocity[b_id] * dt, 0.f);
+
+    // Update orientation
+    update_orientation(orient, velocity, b_id);
+}
+
+__device__ void update_pos_vel_test(
+        const SimulationParameters *params,
+        const glm::vec3* obstacle_position,
+        const float* obstacle_radius,
+        const int obstacle_count,
+        const BoidId b_id,
+        const int tid,
+        glm::vec4 *position,
+        glm::vec4 *position_old,
+        glm::vec3 *velocity,
+        glm::vec3 *velocity_old,
+        glm::vec3 acceleration,
+        BoidsOrientation *orient,
+        float dt
+) {
+    float wall = 4.f;
+    float wall_acc = 15.f;
+
+    // Update walls
+    if (position_old[tid].x > params->aquarium_size.x / 2.f - wall) {
+        auto intensity = std::abs((params->aquarium_size.x / 2.f - wall - position_old[tid].x) / wall);
+        acceleration += intensity * glm::vec3(-wall_acc, 0.f, 0.f);
+    } else if (position_old[tid].x < -params->aquarium_size.x / 2.f + wall) {
+        auto intensity = std::abs((-params->aquarium_size.x / 2.f + wall - position_old[tid].x) / wall);
+        acceleration += intensity * glm::vec3(wall_acc, 0.f, 0.f);
+    }
+
+    if (position_old[tid].y > params->aquarium_size.y / 2.f - wall) {
+        auto intensity = std::abs((params->aquarium_size.y / 2.f - wall - position_old[tid].y) / wall);
+        acceleration += intensity * glm::vec3(0.f, -wall_acc, 0.f);
+    } else if (position_old[tid].y < -params->aquarium_size.y / 2.f + wall) {
+        auto intensity = std::abs((-params->aquarium_size.y / 2.f + wall - position_old[tid].y) / wall);
+        acceleration += intensity * glm::vec3(0.f, wall_acc, 0.f);
+    }
+
+    if (position_old[tid].z > params->aquarium_size.z / 2.f - wall) {
+        auto intensity = std::abs((params->aquarium_size.z / 2.f - wall - position_old[tid].z) / wall);
+        acceleration += intensity * glm::vec3(0.f, 0.f, -wall_acc);
+    } else if (position_old[tid].z < -params->aquarium_size.z / 2.f + wall) {
+        auto intensity = std::abs((-params->aquarium_size.z / 2.f + wall - position_old[tid].z) / wall);
+        acceleration += intensity * glm::vec3(0.f, 0.f, wall_acc);
+    }
+
+    // Update obstacles
+    for (int i = 0; i < obstacle_count; ++i) {
+        float dist = glm::distance(obstacle_position[i], glm::vec3(position_old[tid]));
+
+        if (dist > 1.4f * obstacle_radius[i]) {
+            continue;
+        }
+
+        glm::vec3 e = obstacle_position[i] - glm::vec3(position_old[tid]);
+        glm::vec3 d = glm::normalize(velocity_old[tid]);
+        float de_dot = glm::dot(d, e);
+        if (de_dot < 0.f) {
+            continue;
+        }
+        glm::vec3 p = glm::vec3(position_old[tid]) + d * de_dot;
+        acceleration += glm::normalize(p - obstacle_position[i]) * 12.f;
+    }
+
+    velocity[b_id] = velocity_old[tid] + acceleration * dt;
+
+    if (glm::length(velocity[b_id]) > params->max_speed) {
+        velocity[b_id] = glm::normalize(velocity[b_id]) * params->max_speed;
+    } else if (glm::length(velocity[b_id]) < params->min_speed){
+        velocity[b_id] = glm::normalize(velocity[b_id]) * params->min_speed;
+    }
+
+    position[b_id] = position_old[tid] + glm::vec4(velocity[b_id] * dt, 0.f);
 
     // Update orientation
     update_orientation(orient, velocity, b_id);
@@ -257,7 +332,7 @@ __global__ void ker_update_simulation_naive(
     );
 }
 
-__global__ void ker_update_simulation_with_sort(
+__global__ void ker_update_simulation_with_sort0(
         const SimulationParameters *params,
         const glm::vec3* obstacle_position,
         const float* obstacle_radius,
@@ -273,7 +348,166 @@ __global__ void ker_update_simulation_with_sort(
         float dt
 ) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid = threadIdx.x;
+
     if (b_id >= params->boids_count) return;
+
+    __shared__ glm::vec4 s_position_old[BLOCK_SIZE];
+    __shared__ glm::vec3 s_velocity_old[BLOCK_SIZE];
+    s_position_old[tid] = position_old[b_id];
+    s_velocity_old[tid] = velocity_old[b_id];
+    __syncthreads();
+
+    glm::vec3 acceleration(0.f);
+
+    glm::vec3 separation(0.);
+    glm::vec3 avg_vel(0.);
+    glm::vec3 avg_pos(0.);
+    uint32_t neighbors_count = 0;
+
+    CellCoords cell_coords = get_cell_cords(params, position_old[b_id]);
+
+    CellCoord grid_size_x = std::ceil(params->aquarium_size.x / params->distance);
+    CellCoord grid_size_y = std::ceil(params->aquarium_size.y / params->distance);
+    CellCoord grid_size_z = std::ceil(params->aquarium_size.z / params->distance);
+
+    auto x_start = static_cast<CellCoord>(max(int(cell_coords.x) - 1, 0));
+    auto x_end = static_cast<CellCoord>(min(cell_coords.x + 1, grid_size_x - 1));
+
+    auto y_start = static_cast<CellCoord>(max(int(cell_coords.y) - 1, 0));
+    auto y_end = static_cast<CellCoord>(min(cell_coords.y + 1, grid_size_y - 1));
+
+    auto z_start = static_cast<CellCoord>(max(int(cell_coords.z) - 1, 0));
+    auto z_end = static_cast<CellCoord>(min(cell_coords.z + 1, grid_size_z - 1));
+
+    for (CellCoord curr_cell_z = z_start; curr_cell_z <= z_end; ++curr_cell_z) {
+        for (CellCoord curr_cell_y = y_start; curr_cell_y <= y_end; ++curr_cell_y) {
+            for (CellCoord curr_cell_x = x_start; curr_cell_x <= x_end; ++curr_cell_x) {
+                if (curr_cell_x == cell_coords.x && curr_cell_y == cell_coords.y && curr_cell_z == cell_coords.z) {
+                    continue;
+                }
+                CellId curr_flat_id = flatten_coords(
+                        params,
+                        curr_cell_x,
+                        curr_cell_y,
+                        curr_cell_z
+                );
+
+                for (int k = cell_start[curr_flat_id]; k < cell_end[curr_flat_id]; ++k) {
+                    BoidId other_id = boid_id[k];
+
+                    if (other_id == b_id) {
+                        continue;
+                    }
+
+                    auto distance2 = glm::dot(s_position_old[tid] - position_old[other_id], s_position_old[tid] - position_old[other_id]);
+                    if (distance2 > params->distance * params->distance) {
+                        continue;
+                    }
+
+                    separation += glm::vec3(glm::normalize(s_position_old[tid] - position_old[other_id]) / distance2);
+                    avg_vel += velocity_old[other_id];
+                    avg_pos += glm::vec3(position_old[other_id]);
+
+                    ++neighbors_count;
+                }
+            }
+        }
+    }
+
+    // Update current cell
+    CellId curr_flat_id = flatten_coords(
+            params,
+            cell_coords
+    );
+
+    for (int k = cell_start[curr_flat_id]; k < cell_end[curr_flat_id]; ++k) {
+        BoidId other_id = boid_id[k];
+
+        if (other_id == b_id) {
+            continue;
+        }
+
+        auto distance2 = glm::dot(s_position_old[tid] - position_old[other_id], s_position_old[tid] - position_old[other_id]);
+        if (distance2 > params->distance * params->distance) {
+            continue;
+        }
+
+        int other_block_id = int(other_id) / BLOCK_SIZE;
+        if (other_block_id == blockIdx.x) {
+            int other_tid = int(other_id) % BLOCK_SIZE;
+            separation += glm::vec3(glm::normalize(s_position_old[tid] - s_position_old[other_tid]) / distance2);
+            avg_vel += s_velocity_old[other_tid];
+            avg_pos += glm::vec3(s_position_old[other_tid]);
+        } else {
+            separation += glm::vec3(glm::normalize(s_position_old[tid] - position_old[other_id]) / distance2);
+            avg_vel += velocity_old[other_id];
+            avg_pos += glm::vec3(position_old[other_id]);
+        }
+        ++neighbors_count;
+    }
+
+    if (neighbors_count > 0) {
+        avg_vel /= float(neighbors_count);
+        avg_pos /= float(neighbors_count);
+
+        // Final acceleration of the current boid
+        acceleration =
+                params->separation * separation +
+                params->alignment * (avg_vel - s_velocity_old[tid]) +
+                params->cohesion * (avg_pos - glm::vec3(s_position_old[tid]));
+    }
+
+    // Add noise
+    curandState local_state = state[b_id];
+    float x = curand_uniform(&local_state);
+    float y = curand_uniform(&local_state);
+    float z = curand_uniform(&local_state);
+    state[b_id] = local_state;
+    acceleration += glm::normalize(glm::vec3(2.f * (x - 0.5f), 2.f * (y - 0.5f), 2.f * (z - 0.5f))) * params->noise;
+
+    // Update pos and vel
+    update_pos_vel_test(
+            params,
+            obstacle_position,
+            obstacle_radius,
+            obstacle_count,
+            b_id,
+            tid,
+            position,
+            s_position_old,
+            velocity,
+            s_velocity_old,
+            acceleration,
+            orient,
+            dt
+    );
+}
+
+__global__ void ker_update_simulation_with_sort1(
+        const SimulationParameters *params,
+        const glm::vec3* obstacle_position,
+        const float* obstacle_radius,
+        const int obstacle_count,
+        const BoidId *boid_id,
+        const int *cell_start,
+        const int *cell_end,
+        glm::vec4 *position,
+        glm::vec4 *position_old,
+        glm::vec3 *velocity,
+        glm::vec3 *velocity_old,
+        BoidsOrientation *orient,
+        float dt
+) {
+    BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid = threadIdx.x;
+
+    if (b_id >= params->boids_count) return;
+
+    __shared__ glm::vec4 s_position_old[BLOCK_SIZE];
+    __shared__ glm::vec3 s_velocity_old[BLOCK_SIZE];
+    s_position_old[tid] = position_old[b_id];
+    s_velocity_old[tid] = velocity_old[b_id];
 
     glm::vec3 acceleration(0.f);
 
@@ -314,12 +548,12 @@ __global__ void ker_update_simulation_with_sort(
                         continue;
                     }
 
-                    auto distance2 = glm::dot(position_old[b_id] - position_old[other_id], position_old[b_id] - position_old[other_id]);
+                    auto distance2 = glm::dot(s_position_old[tid] - position_old[other_id], s_position_old[tid] - position_old[other_id]);
                     if (distance2 > params->distance * params->distance) {
                         continue;
                     }
 
-                    separation += glm::vec3(glm::normalize(position_old[b_id] - position_old[other_id]) / distance2);
+                    separation += glm::vec3(glm::normalize(s_position_old[tid] - position_old[other_id]) / distance2);
                     avg_vel += velocity_old[other_id];
                     avg_pos += glm::vec3(position_old[other_id]);
 
@@ -336,8 +570,8 @@ __global__ void ker_update_simulation_with_sort(
         // Final acceleration of the current boid
         acceleration =
                 params->separation * separation +
-                params->alignment * (avg_vel - velocity_old[b_id]) +
-                params->cohesion * (avg_pos - glm::vec3(position_old[b_id]));
+                params->alignment * (avg_vel - s_velocity_old[tid]) +
+                params->cohesion * (avg_pos - glm::vec3(s_position_old[tid]));
     }
 
     // Add noise
@@ -349,16 +583,17 @@ __global__ void ker_update_simulation_with_sort(
     acceleration += glm::normalize(glm::vec3(2.f * (x - 0.5f), 2.f * (y - 0.5f), 2.f * (z - 0.5f))) * params->noise;
 
     // Update pos and vel
-    update_pos_vel(
+    update_pos_vel_test(
             params,
             obstacle_position,
             obstacle_radius,
             obstacle_count,
             b_id,
+            tid,
             position,
-            position_old,
+            s_position_old,
             velocity,
-            velocity_old,
+            s_velocity_old,
             acceleration,
             orient,
             dt
@@ -511,7 +746,7 @@ GPUBoids::~GPUBoids() {
 void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params, const Obstacles &obstacles, Boids &boids, float dt) {
     cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    size_t threads_per_block = 128;
+    size_t threads_per_block = BLOCK_SIZE;
     size_t blocks_num = params.boids_count / threads_per_block + 1;
 
     cuda_status = cudaMemcpy(m_dev_obstacle_position, obstacles.get_pos_array(), SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(glm::vec3), cudaMemcpyHostToDevice);
@@ -537,10 +772,10 @@ void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params
     swap_buffers();
 }
 
-void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &params, const Obstacles &obstacles, Boids &boids, float dt) {
+void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &params, const Obstacles &obstacles, Boids &boids, float dt, int variant = 1) {
     cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    size_t threads_per_block = 128;
+    size_t threads_per_block = BLOCK_SIZE;
     size_t blocks_num = params.boids_count / threads_per_block + 1;
 
     cuda_status = cudaMemcpy(m_dev_obstacle_position, obstacles.get_pos_array(), SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(glm::vec3), cudaMemcpyHostToDevice);
@@ -576,21 +811,39 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     cudaDeviceSynchronize();
 
     // 4.
-    ker_update_simulation_with_sort<<<blocks_num, threads_per_block>>>(
-            m_dev_sim_params,
-            m_dev_obstacle_position,
-            m_dev_obstacle_radius,
-            obstacles.count(),
-            m_dev_boid_id,
-            m_dev_cell_start,
-            m_dev_cell_end,
-            m_dev_position,
-            m_dev_position_old,
-            m_dev_velocity,
-            m_dev_velocity_old,
-            m_dev_orient,
-            dt
-    );
+    if (variant == 1) {
+        ker_update_simulation_with_sort1<<<blocks_num, threads_per_block>>>(
+                m_dev_sim_params,
+                m_dev_obstacle_position,
+                m_dev_obstacle_radius,
+                obstacles.count(),
+                m_dev_boid_id,
+                m_dev_cell_start,
+                m_dev_cell_end,
+                m_dev_position,
+                m_dev_position_old,
+                m_dev_velocity,
+                m_dev_velocity_old,
+                m_dev_orient,
+                dt
+        );
+    } else {
+         ker_update_simulation_with_sort0<<<blocks_num, threads_per_block>>>(
+                m_dev_sim_params,
+                m_dev_obstacle_position,
+                m_dev_obstacle_radius,
+                obstacles.count(),
+                m_dev_boid_id,
+                m_dev_cell_start,
+                m_dev_cell_end,
+                m_dev_position,
+                m_dev_position_old,
+                m_dev_velocity,
+                m_dev_velocity_old,
+                m_dev_orient,
+                dt
+        );
+    }
     cudaDeviceSynchronize();
 
     // 5.

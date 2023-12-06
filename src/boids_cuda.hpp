@@ -17,7 +17,7 @@ namespace boids::cuda {
         explicit GPUBoids(const Boids& boids, const BoidsRenderer& renderer);
         explicit GPUBoids(const Boids& boids);
 
-        void update_simulation_with_sort(const SimulationParameters& params, const Obstacles& obstacles, Boids &boids, float dt);
+        void update_simulation_with_sort(const SimulationParameters& params, const Obstacles& obstacles, Boids &boids, float dt, int variant);
         void update_simulation_naive(const SimulationParameters &params, const Obstacles& obstacles, Boids &boids, float dt);
 
         void reset(const SimulationParameters& params);
