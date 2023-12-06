@@ -231,7 +231,7 @@ int main() {
                     );
                 }
 
-                if (selected_list_item >= 0) {
+                if (selected_list_item >= 0 && obstacles.count() > 0) {
                     glm::vec3 pos = obstacles.pos(selected_list_item);
                     float pos_array[3] = { pos.x, pos.y, pos.z };
                     ImGui::InputFloat3("Position", pos_array);
@@ -260,9 +260,9 @@ int main() {
         if (curr_solution == Solution::CPUNaive) {
             boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, boids.orientation, dt_as_seconds);
         } else if (curr_solution == Solution::GPUCUDASort) {
-            gpu_boids.update_simulation_with_sort(sim_params, boids, dt_as_seconds);
+            gpu_boids.update_simulation_with_sort(sim_params, obstacles, boids, dt_as_seconds);
         } else {
-            gpu_boids.update_simulation_naive(sim_params, boids, dt_as_seconds);
+            gpu_boids.update_simulation_naive(sim_params, obstacles, boids, dt_as_seconds);
         }
 
         boids_renderer.set_ubo(boids.position, boids.orientation);

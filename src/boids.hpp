@@ -97,14 +97,14 @@ namespace boids {
         void push(glm::vec3 pos, float radius);
         void remove(size_t elem);
 
-        const float* get_radius_array() { return m_radius.data(); }
-        const glm::vec3* get_pos_array() { return m_pos.data(); }
+        const float* get_radius_array() const { return m_radius.data(); }
+        const glm::vec3* get_pos_array() const { return m_pos.data(); }
 
         float &radius(size_t elem);
         glm::vec3 &pos(size_t elem);
 
 
-        size_t count() { return m_radius.size(); }
+        size_t count() const { return m_radius.size(); }
     };
 
     glm::vec3 rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);

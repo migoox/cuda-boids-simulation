@@ -60,6 +60,9 @@ __device__ void update_orientation(BoidsOrientation *orient, glm::vec3 *velocity
 
 __device__ void update_pos_vel(
         const SimulationParameters *params,
+        const glm::vec3* obstacle_position,
+        const float* obstacle_radius,
+        const int obstacle_count,
         const BoidId b_id,
         glm::vec4 *position,
         glm::vec4 *position_old,
@@ -72,6 +75,7 @@ __device__ void update_pos_vel(
     float wall = 4.f;
     float wall_acc = 15.f;
 
+    // Update walls
     if (position_old[b_id].x > params->aquarium_size.x / 2.f - wall) {
         auto intensity = std::abs((params->aquarium_size.x / 2.f - wall - position_old[b_id].x) / wall);
         acceleration += intensity * glm::vec3(-wall_acc, 0.f, 0.f);
@@ -94,6 +98,20 @@ __device__ void update_pos_vel(
     } else if (position_old[b_id].z < -params->aquarium_size.z / 2.f + wall) {
         auto intensity = std::abs((-params->aquarium_size.z / 2.f + wall - position_old[b_id].z) / wall);
         acceleration += intensity * glm::vec3(0.f, 0.f, wall_acc);
+    }
+
+    // Update obstacles
+    for (int i = 0; i < obstacle_count; ++i) {
+        float dist2 = glm::dot(obstacle_position[i] - glm::vec3(position_old[b_id]), obstacle_position[i] - glm::vec3(position_old[b_id]));
+        if (dist2 > 4 * obstacle_radius[i] * obstacle_radius[i]) {
+            continue;
+        }
+
+        glm::vec3 e = obstacle_position[i] - glm::vec3(position_old[b_id]);
+        glm::vec3 d = glm::normalize(velocity_old[b_id]);
+        glm::vec3 p = glm::vec3(position_old[b_id]) + d * glm::dot(d, e);
+
+        acceleration += glm::normalize(p - obstacle_position[i]) * 100.f / dist2;
     }
 
     velocity[b_id] = velocity_old[b_id] + acceleration * dt;
@@ -167,6 +185,9 @@ __global__ void ker_clear_starts(CellId *cell_id, int *cell_start, int *cell_end
 
 __global__ void ker_update_simulation_naive(
         const SimulationParameters *params,
+        const glm::vec3* obstacle_position,
+        const float* obstacle_radius,
+        const int obstacle_count,
         glm::vec4 *position,
         glm::vec4 *position_old,
         glm::vec3 *velocity,
@@ -223,6 +244,9 @@ __global__ void ker_update_simulation_naive(
     // Update pos and vel
     update_pos_vel(
             params,
+            obstacle_position,
+            obstacle_radius,
+            obstacle_count,
             b_id,
             position,
             position_old,
@@ -236,6 +260,9 @@ __global__ void ker_update_simulation_naive(
 
 __global__ void ker_update_simulation_with_sort(
         const SimulationParameters *params,
+        const glm::vec3* obstacle_position,
+        const float* obstacle_radius,
+        const int obstacle_count,
         const BoidId *boid_id,
         const int *cell_start,
         const int *cell_end,
@@ -325,6 +352,9 @@ __global__ void ker_update_simulation_with_sort(
     // Update pos and vel
     update_pos_vel(
             params,
+            obstacle_position,
+            obstacle_radius,
+            obstacle_count,
             b_id,
             position,
             position_old,
@@ -432,6 +462,11 @@ void GPUBoids::init_default(const Boids& boids) {
     cuda_status = cudaMalloc((void**)&m_dev_orient, sizeof(BoidsOrientation));
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
 
+    cuda_status = cudaMalloc((void**)&m_dev_obstacle_radius, SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(float));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_obstacle_position, SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(glm::vec3));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+
     cuda_status = cudaMemcpy(m_dev_position_old, boids.position, array_size_vec4, cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
     cuda_status = cudaMemcpy(m_dev_velocity_old, boids.velocity, array_size_vec3, cudaMemcpyHostToDevice);
@@ -474,16 +509,22 @@ GPUBoids::~GPUBoids() {
     cudaFree(m_dev_boid_id);
 }
 
-void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params, Boids &boids, float dt) {
-    // 1. Update simulation parameters
+void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params, const Obstacles &obstacles, Boids &boids, float dt) {
     cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-
     size_t threads_per_block = 1024;
     size_t blocks_num = params.boids_count / threads_per_block + 1;
 
+    cuda_status = cudaMemcpy(m_dev_obstacle_position, obstacles.get_pos_array(), SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(m_dev_obstacle_radius, obstacles.get_radius_array(), SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(float), cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+
     ker_update_simulation_naive<<<blocks_num, threads_per_block>>>(
             m_dev_sim_params,
+            m_dev_obstacle_position,
+            m_dev_obstacle_radius,
+            obstacles.count(),
             m_dev_position,
             m_dev_position_old,
             m_dev_velocity,
@@ -497,15 +538,18 @@ void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params
     swap_buffers();
 }
 
-void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &params, Boids &boids, float dt) {
-    // 1. Update simulation parameters
+void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &params, const Obstacles &obstacles, Boids &boids, float dt) {
     cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-
     size_t threads_per_block = 1024;
     size_t blocks_num = params.boids_count / threads_per_block + 1;
 
-    // 1.
+    cuda_status = cudaMemcpy(m_dev_obstacle_position, obstacles.get_pos_array(), SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(m_dev_obstacle_radius, obstacles.get_radius_array(), SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(float), cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+
+    // 1. Update simulation parameters
     ker_find_cell_ids<<<blocks_num, threads_per_block>>>(
             m_dev_sim_params,
             m_dev_boid_id,
@@ -535,6 +579,9 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     // 4.
     ker_update_simulation_with_sort<<<blocks_num, threads_per_block>>>(
             m_dev_sim_params,
+            m_dev_obstacle_position,
+            m_dev_obstacle_radius,
+            obstacles.count(),
             m_dev_boid_id,
             m_dev_cell_start,
             m_dev_cell_end,

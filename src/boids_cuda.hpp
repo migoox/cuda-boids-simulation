@@ -17,8 +17,8 @@ namespace boids::cuda {
         explicit GPUBoids(const Boids& boids, const BoidsRenderer& renderer);
         explicit GPUBoids(const Boids& boids);
 
-        void update_simulation_with_sort(const SimulationParameters& params, Boids &boids, float dt);
-        void update_simulation_naive(const SimulationParameters &params, Boids &boids, float dt);
+        void update_simulation_with_sort(const SimulationParameters& params, const Obstacles& obstacles, Boids &boids, float dt);
+        void update_simulation_naive(const SimulationParameters &params, const Obstacles& obstacles, Boids &boids, float dt);
 
         void reset(const SimulationParameters& params);
 
@@ -35,6 +35,9 @@ namespace boids::cuda {
         glm::vec3 *m_dev_velocity_old{};
         glm::vec4 *m_dev_position{};
         glm::vec3 *m_dev_velocity{};
+
+        glm::vec3 *m_dev_obstacle_position{};
+        float *m_dev_obstacle_radius{};
 
         BoidsOrientation *m_dev_orient{};
 
