@@ -42,53 +42,53 @@ GLint common::ShaderProgram::get_uniform_location(const char *name) {
     return location;
 }
 
-void common::ShaderProgram::set_uniform_1i(const char* name, int value)
-{
+void common::ShaderProgram::set_uniform_1i(const char* name, int value) {
+    this->bind();
     GLCall( glUniform1i(get_uniform_location(name), value) );
 }
 
-void common::ShaderProgram::set_uniform_2i(const char* name, int v1, int v2)
-{
+void common::ShaderProgram::set_uniform_2i(const char* name, int v1, int v2) {
+    this->bind();
     GLCall( glUniform2i(get_uniform_location(name), v1, v2) );
 }
 
-void common::ShaderProgram::set_uniform_1f(const char* name, float value)
-{
+void common::ShaderProgram::set_uniform_1f(const char* name, float value) {
+    this->bind();
     GLCall( glUniform1f(get_uniform_location(name), value) );
 }
 
-void common::ShaderProgram::set_uniform_2f(const char* name, float f0, float f1)
-{
+void common::ShaderProgram::set_uniform_2f(const char* name, float f0, float f1) {
+    this->bind();
     GLCall( glUniform2f(get_uniform_location(name), f0, f1) );
 }
 
-void common::ShaderProgram::set_uniform_3f(const char* name, float f0, float f1, float f2)
-{
+void common::ShaderProgram::set_uniform_3f(const char* name, float f0, float f1, float f2) {
+    this->bind();
     GLCall( glUniform3f(get_uniform_location(name), f0, f1, f2) );
 }
 
-void common::ShaderProgram::set_uniform_3f(const char* name, glm::vec3 vec)
-{
+void common::ShaderProgram::set_uniform_3f(const char* name, glm::vec3 vec) {
+    this->bind();
     GLCall( glUniform3f(get_uniform_location(name), vec.x, vec.y, vec.z) );
 }
 
-void common::ShaderProgram::set_uniform_4f(const char* name, float f0, float f1, float f2, float f3)
-{
+void common::ShaderProgram::set_uniform_4f(const char* name, float f0, float f1, float f2, float f3) {
+    this->bind();
     GLCall( glUniform4f(get_uniform_location(name), f0, f1, f2, f3) );
 }
 
-void common::ShaderProgram::set_uniform_4f(const char* name, glm::vec4 vec)
-{
+void common::ShaderProgram::set_uniform_4f(const char* name, glm::vec4 vec) {
+    this->bind();
     GLCall( glUniform4f(get_uniform_location(name), vec.x, vec.y, vec.z, vec.w) );
 }
 
-void common::ShaderProgram::set_uniform_mat3f(const char* name, const glm::mat3& matrix)
-{
+void common::ShaderProgram::set_uniform_mat3f(const char* name, const glm::mat3& matrix) {
+    this->bind();
     GLCall(glUniformMatrix3fv(get_uniform_location(name), 1, GL_FALSE, &matrix[0][0]));
 }
 
-void common::ShaderProgram::set_uniform_mat4f(const char* name, const glm::mat4& matrix)
-{
+void common::ShaderProgram::set_uniform_mat4f(const char* name, const glm::mat4& matrix) {
+    this->bind();
     GLCall( glUniformMatrix4fv(get_uniform_location(name), 1, GL_FALSE, &matrix[0][0]) );
 }
 
