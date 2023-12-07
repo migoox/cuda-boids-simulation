@@ -2,7 +2,7 @@
 
 #include "gl_debug.h"
 
-common::Mesh::Mesh(float *vertices, size_t vertices_size, u_int32_t *indices, size_t indices_size, u_int32_t indices_count)
+common::Mesh::Mesh(float *vertices, size_t vertices_size, uint32_t *indices, size_t indices_size, uint32_t indices_count)
         : Mesh() {
     this->set(vertices, vertices_size, indices, indices_size, indices_count);
 }
@@ -25,7 +25,7 @@ void common::Mesh::unbind() const {
     GLCall( glBindVertexArray(0) );
 }
 
-void common::Mesh::set(float *vertices, size_t vertices_size, u_int32_t *indices, size_t indices_size, u_int32_t indices_count) {
+void common::Mesh::set(float *vertices, size_t vertices_size, uint32_t *indices, size_t indices_size, uint32_t indices_count) {
     m_count = indices_count;
 
     GLCall( glBindVertexArray(m_vao) );

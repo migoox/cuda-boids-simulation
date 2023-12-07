@@ -7,10 +7,10 @@ namespace common {
     class Mesh {
     public:
         Mesh();
-        Mesh(float *vertices, size_t vertices_size, u_int32_t *indices, size_t indices_size, u_int32_t indices_count);
+        Mesh(float *vertices, size_t vertices_size, uint32_t *indices, size_t indices_size, uint32_t indices_count);
         ~Mesh();
 
-        void set(float *vertices, size_t vertices_size, u_int32_t *indices, size_t indices_size, u_int32_t indices_count);
+        void set(float *vertices, size_t vertices_size, uint32_t *indices, size_t indices_size, uint32_t indices_count);
         void load(const char *path);
 
         void bind() const;
