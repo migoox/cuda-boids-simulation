@@ -1,5 +1,4 @@
 #include "boids_cpu.hpp"
-#include <ranges>
 #include <vector>
 #include <execution>
 
