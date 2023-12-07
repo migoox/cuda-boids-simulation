@@ -1,6 +1,6 @@
 # boids-simulation
 ![image](https://github.com/migoox/boids-simulation/assets/56317134/d17fae4c-a245-43ed-8331-3850e2e2df73)
-![image](https://github.com/migoox/boids-simulation/assets/56317134/933683e0-9b6b-4d88-bbfa-18590f1ac65c)
+![image2](https://github.com/migoox/boids-simulation/assets/56317134/f5f8912c-ea63-4d5f-9d1f-1667a437a1ce)
 
 ## Usage
 1. Use `W`,`S`,`A`,`D` to rotate the camera and `Q`, `E` to zoom in/out.
