@@ -1,6 +1,5 @@
 # boids-simulation
 ![image](https://github.com/migoox/boids-simulation/assets/56317134/d17fae4c-a245-43ed-8331-3850e2e2df73)
-![image](https://github.com/migoox/boids-simulation/assets/56317134/31cd64ea-b9a0-4fb0-943f-be1f0f8def65)
 ![image](https://github.com/migoox/boids-simulation/assets/56317134/933683e0-9b6b-4d88-bbfa-18590f1ac65c)
 
 ## Usage
