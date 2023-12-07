@@ -1,6 +1,9 @@
 # boids-simulation
 ## Compilation guide
 ### Linux
+1. Clone the repository to the desired location `git clone https://github.com/migoox/boids-simulation`,
+2. Navigate to the cloned directory and run `cmake .`,
+3. Run `make`.
 ### Windows
 1. Clone the repository to the desired location `git clone https://github.com/migoox/boids-simulation`,
 2. Navigate to the cloned directory and run `cmake .`,
