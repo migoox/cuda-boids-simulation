@@ -1,10 +1,5 @@
-//
-// Created by billyk on 11/28/23.
-//
-
 #include "camera.hpp"
 #include <glm/gtx/transform.hpp>
-#include <glm/gtc/constants.hpp>
 #include <algorithm>
 
 common::OrbitingCamera::OrbitingCamera(glm::vec3 center, float screen_width, float screen_height)
@@ -31,7 +26,7 @@ void common::OrbitingCamera::set_screen_size(float screen_width, float screen_he
             0.33f * glm::pi<float>(),
             screen_width / screen_height,
             0.1f,
-            100.0f
+            1800.0f
     );
 }
 
@@ -85,6 +80,7 @@ void common::OrbitingCamera::update_azimuthal_angle(float delta) {
     m_azimuthal_angle += delta;
     update_view_matrix();
 }
+
 
 
 

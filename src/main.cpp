@@ -21,11 +21,16 @@
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void process_input(GLFWwindow *window);
-bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera);
+bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera, float dt);
 bool list_view_getter(void* data, int index, const char** output);
 
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
+
+static unsigned int curr_src_width = SCR_WIDTH;
+static unsigned int curr_src_height = SCR_HEIGHT;
+
+static bool app_resized = false;
 
 enum Solution {
     CPUNaive,
@@ -153,7 +158,12 @@ int main() {
     {
         glfwPollEvents();
         process_input(window);
-        if (process_camera_input(window, camera)) {
+
+        if (app_resized) {
+            camera.set_screen_size(static_cast<float>(curr_src_width), static_cast<float>(curr_src_height));
+        }
+
+        if (process_camera_input(window, camera, dt)) {
             boids_sp.bind();
             boids_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
             basic_sp.bind();
@@ -204,7 +214,7 @@ int main() {
 
                 ImGui::InputInt("Boids count", &new_sim_params.boids_count, 0, 1000, ImGuiInputTextFlags_CharsDecimal);
                 new_sim_params.boids_count = (new_sim_params.boids_count < 0) ? 0 : new_sim_params.boids_count;
-                new_sim_params.boids_count = (new_sim_params.boids_count > 50000) ? 50000 : new_sim_params.boids_count;
+                new_sim_params.boids_count = (new_sim_params.boids_count > boids::SimulationParameters::MAX_BOID_COUNT) ? boids::SimulationParameters::MAX_BOID_COUNT : new_sim_params.boids_count;
 
                 ImGui::SliderFloat("Aquarium size X", &new_sim_params.aquarium_size.x, 10.f, boids::SimulationParameters::MAX_AQUARIUM_SIZE_X);
                 ImGui::SliderFloat("Aquarium size Y", &new_sim_params.aquarium_size.y, 10.f, boids::SimulationParameters::MAX_AQUARIUM_SIZE_Y);
@@ -279,6 +289,7 @@ int main() {
             gpu_boids.update_simulation_naive(sim_params, obstacles, boids, dt_as_seconds);
         }
 
+
         boids_renderer.set_vbos(sim_params, boids.position, boids.orientation);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -302,7 +313,7 @@ int main() {
     return 0;
 }
 
-bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera) {
+bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera, float dt) {
     bool result = false;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
         camera.update_azimuthal_angle(-glm::radians(2.f));
@@ -349,10 +360,14 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     // Make sure the viewport matches the new window dimensions; note that width and
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
+    app_resized = true;
+    curr_src_width = width;
+    curr_src_height = height;
 }
 
 bool list_view_getter(void* data, int index, const char** output) {
-    // TODO: malloc
-    *output = ("Obstacle " + std::to_string(index)).c_str();
+    static std::string curr_name = "Obstacle";
+    curr_name = "Obstacle " + std::to_string(index);
+    *output = curr_name.c_str();
     return true;
 }

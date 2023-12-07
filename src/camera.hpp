@@ -21,6 +21,7 @@ namespace common {
         const glm::mat4& get_view() const override;
         void set_screen_size(float screen_width, float screen_height) override;
 
+
         void update_radius(float delta);
 
         // Angles should be in radians
