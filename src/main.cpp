@@ -1,6 +1,7 @@
 #define GLM_FORCE_CUDA
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <filesystem>
 #include "vendor/imgui/backend/imgui_impl_glfw.h"
 #include "vendor/imgui/backend/imgui_impl_opengl3.h"
 #include "vendor/imgui/imgui.h"
@@ -16,7 +17,6 @@
 
 #include <iostream>
 #include <chrono>
-#include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -106,13 +106,16 @@ int main() {
 
     // -------------------------------------------------------------------------
 
-    common::ShaderProgram boids_sp("../res/boids.vert", "../res/boids.frag");
-    common::ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
-    common::ShaderProgram obstacles_sp("../res/obstacles.vert", "../res/basic.frag");
+    std::string executable_dir = std::filesystem::path(__FILE__).parent_path().string();
+    common::ShaderProgram boids_sp(executable_dir + "/../res/boids.vert", executable_dir + "/../res/boids.frag");
+    common::ShaderProgram basic_sp(executable_dir + "/../res/basic.vert", executable_dir + "/../res/basic.frag");
+    common::ShaderProgram obstacles_sp(executable_dir + "/../res/obstacles.vert",executable_dir +  "/../res/basic.frag");
 
     Solution curr_solution = Solution::GPUCUDASortVar2;
 
     boids::SimulationParameters sim_params(4.5f, 0.85f, 2.f, 1.4f);
+
+    // Default settings
     boids::SimulationParameters new_sim_params;
     sim_params.aquarium_size.x = 90.f;
     sim_params.aquarium_size.y = 90.f;

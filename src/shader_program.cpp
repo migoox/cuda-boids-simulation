@@ -4,10 +4,10 @@
 #include "shader_program.hpp"
 #include "gl_debug.h"
 
-common::ShaderProgram::ShaderProgram(const char *vert_path, const char *frag_path)
+common::ShaderProgram::ShaderProgram(const std::string &vert_path, const std::string &frag_path)
 : m_parsing_failed(false), m_id(0) {
-    std::string vert_source = this->parse_shader(vert_path);
-    std::string frag_source = this->parse_shader(frag_path);
+    std::string vert_source = this->parse_shader(vert_path.c_str());
+    std::string frag_source = this->parse_shader(frag_path.c_str());
 
     if (m_parsing_failed) {
         return;
@@ -174,4 +174,3 @@ GLuint common::ShaderProgram::create_shader_program(const std::string &vert_shad
 bool common::ShaderProgram::is_valid() const {
     return !m_parsing_failed;
 }
-

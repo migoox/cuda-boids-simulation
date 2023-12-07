@@ -8,7 +8,7 @@
 namespace common {
     class ShaderProgram {
     public:
-        ShaderProgram(const char* vert_path, const char* frag_path);
+        ShaderProgram(const std::string &vert_path, const std::string &frag_path);
         ~ShaderProgram();
 
         bool is_valid() const;
