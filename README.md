@@ -3,7 +3,7 @@
 ![image2](https://github.com/migoox/boids-simulation/assets/56317134/f5f8912c-ea63-4d5f-9d1f-1667a437a1ce)
 
 ## Usage
-1. Use `W`,`S`,`A`,`D` to rotate the camera and `Q`, `E` to zoom in/out.
+1. Use `W`, `S`, `A`, `D` to rotate the camera and `Q`, `E` to zoom in/out.
 2. Use `Simulation` window to
   1. Restart the simulation with different aquarium size, boids count and algorithm,
   2. Modify the simulation parameters,
