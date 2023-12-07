@@ -79,12 +79,13 @@ namespace boids {
         BoidsRenderer();
 
         void draw(const common::ShaderProgram &shader_program, int count) const;
-        void set_ubo(glm::vec4 *position, const BoidsOrientation &orientation);
+        void set_vbos(const SimulationParameters &params, glm::vec4 *position, const BoidsOrientation &orientation);
 
     private:
         common::Mesh m_mesh;
-        GLuint m_pos_ubo_id;
-        GLuint m_orient_ubo_id;
+
+        GLuint m_pos_vbo_id, m_forward_vbo_id, m_up_vbo_id, m_right_vbo_id;
+
     };
 
     class Obstacles {

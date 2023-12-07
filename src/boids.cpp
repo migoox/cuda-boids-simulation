@@ -42,35 +42,52 @@ boids::BoidsRenderer::BoidsRenderer()
 
     m_mesh.set(vertices, sizeof(vertices), indices, sizeof(indices), 12);
 
-    GLCall( glGenBuffers(1, &m_pos_ubo_id) );
-    GLCall( glGenBuffers(1, &m_orient_ubo_id) );
-    GLCall( glBindBuffer(GL_UNIFORM_BUFFER, 0) );
+    m_mesh.bind();
+    GLCall( glGenBuffers(1, &m_pos_vbo_id) );
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_pos_vbo_id) );
+    GLCall( glEnableVertexAttribArray(1) );
+    GLCall( glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0) );
+    GLCall( glVertexAttribDivisor(1, 1) );
+
+    GLCall( glGenBuffers(1, &m_forward_vbo_id) );
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_forward_vbo_id) );
+    GLCall( glEnableVertexAttribArray(2) );
+    GLCall( glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0) );
+    GLCall( glVertexAttribDivisor(2, 1) );
+
+    GLCall( glGenBuffers(1, &m_up_vbo_id) );
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_up_vbo_id) );
+    GLCall( glEnableVertexAttribArray(3) );
+    GLCall( glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0) );
+    GLCall( glVertexAttribDivisor(3, 1) );
+
+    GLCall( glGenBuffers(1, &m_right_vbo_id) );
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_right_vbo_id) );
+    GLCall( glEnableVertexAttribArray(4) );
+    GLCall( glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0) );
+    GLCall( glVertexAttribDivisor(4, 1) );
+
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, 0) );
+    GLCall( glBindVertexArray(0) );
 }
 
-void boids::BoidsRenderer::set_ubo(
-        glm::vec4 position[SimulationParameters::MAX_BOID_COUNT],
-        const BoidsOrientation& orientation
-) {
-    GLCall( glBindBuffer(GL_UNIFORM_BUFFER, m_pos_ubo_id) );
-    GLCall( glBufferData(GL_UNIFORM_BUFFER, SimulationParameters::MAX_BOID_COUNT * 4, position, GL_DYNAMIC_DRAW) );
+void boids::BoidsRenderer::set_vbos(const SimulationParameters& params, glm::vec4 *position, const boids::BoidsOrientation &orientation) {
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_pos_vbo_id) );
+    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), position, GL_DYNAMIC_DRAW));
 
-    GLCall( glBindBuffer(GL_UNIFORM_BUFFER, m_orient_ubo_id) );
-    GLCall( glBufferData(GL_UNIFORM_BUFFER, sizeof(boids::BoidsOrientation), &orientation, GL_DYNAMIC_DRAW) );
-    GLCall( glBindBuffer(GL_UNIFORM_BUFFER, 0) );
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_forward_vbo_id) );
+    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.forward, GL_DYNAMIC_DRAW));
+
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_up_vbo_id) );
+    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.up, GL_DYNAMIC_DRAW));
+
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_right_vbo_id) );
+    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.right, GL_DYNAMIC_DRAW));
 }
 
 void boids::BoidsRenderer::draw(const common::ShaderProgram &shader_program, int count) const {
     shader_program.bind();
     m_mesh.bind();
-    GLCall( GLuint pos_block_index = glGetUniformBlockIndex(shader_program.get_id(), "boids_block_position") );
-    GLCall( GLuint orient_block_index = glGetUniformBlockIndex(shader_program.get_id(), "boids_block_orientation") );
-
-    GLCall( glUniformBlockBinding(shader_program.get_id(), pos_block_index, 0) );
-    GLCall( glUniformBlockBinding(shader_program.get_id(), orient_block_index, 1) );
-
-    GLCall( glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_pos_ubo_id) );
-    GLCall( glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_orient_ubo_id) );
-
     GLCall( glDrawElementsInstanced(GL_TRIANGLES, m_mesh.get_count(), GL_UNSIGNED_INT, nullptr, count) );
 }
 

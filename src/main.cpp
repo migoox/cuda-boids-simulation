@@ -106,7 +106,7 @@ int main() {
 
     // -------------------------------------------------------------------------
 
-    common::ShaderProgram boids_sp("../res/boid.vert", "../res/boid.frag");
+    common::ShaderProgram boids_sp("../res/boids.vert", "../res/boids.frag");
     common::ShaderProgram basic_sp("../res/basic.vert", "../res/basic.frag");
     common::ShaderProgram obstacles_sp("../res/obstacles.vert", "../res/basic.frag");
 
@@ -124,7 +124,7 @@ int main() {
 
     boids::BoidsRenderer boids_renderer;
     boids::Boids boids(sim_params);
-    boids_renderer.set_ubo(boids.position, boids.orientation);
+    boids_renderer.set_vbos(sim_params, boids.position, boids.orientation);
 
     boids::cuda::GPUBoids gpu_boids = boids::cuda::GPUBoids(boids, boids_renderer);
 
@@ -276,7 +276,7 @@ int main() {
             gpu_boids.update_simulation_naive(sim_params, obstacles, boids, dt_as_seconds);
         }
 
-        boids_renderer.set_ubo(boids.position, boids.orientation);
+        boids_renderer.set_vbos(sim_params, boids.position, boids.orientation);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
