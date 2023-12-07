@@ -8,7 +8,7 @@
 #include <cuda_gl_interop.h>
 #define BLOCK_SIZE 256
 
-using namespace boids::cuda;
+using namespace boids::cuda_gpu;
 using namespace boids;
 
 __device__ curandState state[SimulationParameters::MAX_BOID_COUNT];

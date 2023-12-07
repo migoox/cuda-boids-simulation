@@ -126,7 +126,7 @@ int main() {
     boids::Boids boids(sim_params);
     boids_renderer.set_vbos(sim_params, boids.position, boids.orientation);
 
-    boids::cuda::GPUBoids gpu_boids = boids::cuda::GPUBoids(boids, boids_renderer);
+    boids::cuda_gpu::GPUBoids gpu_boids = boids::cuda_gpu::GPUBoids(boids, boids_renderer);
 
     common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
     boids_sp.bind();

@@ -2,7 +2,7 @@
 #define BOIDS_SIMULATION_BOIDS_CUDA_HPP
 #include "boids_cpu.hpp"
 
-namespace boids::cuda {
+namespace boids::cuda_gpu {
     using CellId = uint32_t;
     using CellCoord = uint32_t;
 
