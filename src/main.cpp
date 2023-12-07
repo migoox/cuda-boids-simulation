@@ -24,20 +24,19 @@ void process_input(GLFWwindow *window);
 bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera, float dt);
 bool list_view_getter(void* data, int index, const char** output);
 
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
-
-static unsigned int curr_src_width = SCR_WIDTH;
-static unsigned int curr_src_height = SCR_HEIGHT;
-
-static bool app_resized = false;
-
 enum Solution {
     CPUNaive,
     GPUCUDANaive,
     GPUCUDASortVar1,
     GPUCUDASortVar2
 };
+
+const uint32_t SCR_WIDTH = 800;
+const uint32_t SCR_HEIGHT = 600;
+
+uint32_t curr_scr_width = SCR_WIDTH;
+uint32_t curr_scr_height = SCR_HEIGHT;
+bool scr_size_changed = false;
 
 int main() {
     // GLFW: initialize and configure
@@ -67,7 +66,7 @@ int main() {
 #endif
 
     // Glfw window creation
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Boids Simulation", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "[GLFW Init]: Failed to create GLFW window" << std::endl;
@@ -137,19 +136,16 @@ int main() {
     boids::cuda_gpu::GPUBoids gpu_boids = boids::cuda_gpu::GPUBoids(boids, boids_renderer);
 
     common::OrbitingCamera camera(glm::vec3(0.), SCR_WIDTH, SCR_HEIGHT);
-    boids_sp.bind();
     boids_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
-    obstacles_sp.bind();
     obstacles_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
-    basic_sp.bind();
     basic_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
 
     common::Box aquarium;
-    basic_sp.bind();
     basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
 
     std::chrono::steady_clock::time_point current_time = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point previous_time = current_time;
+    float dt_as_seconds = 0.f;
 
     GLCall( glEnable(GL_DEPTH_TEST) );
     GLCall( glEnable(GL_BLEND) );
@@ -159,16 +155,13 @@ int main() {
         glfwPollEvents();
         process_input(window);
 
-        if (app_resized) {
-            camera.set_screen_size(static_cast<float>(curr_src_width), static_cast<float>(curr_src_height));
+        if (scr_size_changed) {
+            camera.set_screen_size(static_cast<float>(curr_scr_width), static_cast<float>(curr_scr_height));
         }
 
-        if (process_camera_input(window, camera, dt)) {
-            boids_sp.bind();
+        if (process_camera_input(window, camera, dt_as_seconds) || scr_size_changed) {
             boids_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
-            basic_sp.bind();
             basic_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
-            obstacles_sp.bind();
             obstacles_sp.set_uniform_mat4f("u_projection_view", camera.get_proj() * camera.get_view());
         }
 
@@ -200,9 +193,7 @@ int main() {
                     sim_params.aquarium_size = new_sim_params.aquarium_size;
                     sim_params.boids_count = new_sim_params.boids_count;
 
-                    basic_sp.bind();
                     basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
-
                     if (curr_item == Solution::CPUNaive) {
                         boids.reset(sim_params);
                     } else {
@@ -278,7 +269,7 @@ int main() {
         previous_time = current_time;
 
         // Get the delta time in seconds
-        float dt_as_seconds = delta_time.count();
+        dt_as_seconds = delta_time.count();
         if (curr_solution == Solution::CPUNaive) {
             boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, boids.orientation, dt_as_seconds);
         } else if (curr_solution == Solution::GPUCUDASortVar1) {
@@ -315,33 +306,36 @@ int main() {
 
 bool process_camera_input(GLFWwindow *window, common::OrbitingCamera& camera, float dt) {
     bool result = false;
+    float  radius_speed = 36.f;
+    float  angle_speed = 46.f;
+
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-        camera.update_azimuthal_angle(-glm::radians(2.f));
+        camera.update_azimuthal_angle(-glm::radians(angle_speed) * dt);
         result = true;
     }
 
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        camera.update_azimuthal_angle(glm::radians(2.f));
+        camera.update_azimuthal_angle(glm::radians(angle_speed) * dt);
         result = true;
     }
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-        camera.update_polar_angle(-glm::radians(2.f));
+        camera.update_polar_angle(-glm::radians(angle_speed) * dt);
         result = true;
     }
 
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        camera.update_polar_angle(glm::radians(2.f));
+        camera.update_polar_angle(glm::radians(angle_speed) * dt);
         result = true;
     }
 
-    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-        camera.update_radius(-0.8f);
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+        camera.update_radius(-radius_speed * dt);
         result = true;
     }
 
-    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-        camera.update_radius(0.8f);
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+        camera.update_radius(radius_speed * dt);
         result = true;
     }
 
@@ -360,9 +354,10 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     // Make sure the viewport matches the new window dimensions; note that width and
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
-    app_resized = true;
-    curr_src_width = width;
-    curr_src_height = height;
+
+    curr_scr_width = width;
+    curr_scr_height = height;
+    scr_size_changed = true;
 }
 
 bool list_view_getter(void* data, int index, const char** output) {
