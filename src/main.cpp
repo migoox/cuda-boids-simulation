@@ -97,6 +97,13 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
+    const GLubyte* vendor = glGetString(GL_VENDOR);
+    const GLubyte* renderer = glGetString(GL_RENDERER);
+    if (vendor && renderer) {
+        std::cout << "[GL]: Vendor: " << vendor << std::endl;
+        std::cout << "[GL]: Renderer: " << renderer << std::endl;
+    }
+
     // -------------------------------------------------------------------------
 
     common::ShaderProgram boids_sp("../res/boid.vert", "../res/boid.frag");
