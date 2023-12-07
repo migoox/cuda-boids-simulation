@@ -35,22 +35,31 @@ __device__ CellCoords get_cell_cords(const SimulationParameters *sim_params, con
     };
 }
 
-__device__ CellId get_flat_cell_id(const SimulationParameters *sim_params, const glm::vec4& position) {
+__device__ CellId get_flat_cell_id(
+        const SimulationParameters *sim_params,
+        const glm::vec4& position
+) {
     return flatten_coords(
             sim_params,
             get_cell_cords(sim_params, position)
     );
 }
 
-__device__ void update_orientation(BoidsOrientation *orient, glm::vec3 *velocity, BoidId b_id) {
+__device__ void update_orientation(
+        glm::vec4 *forward,
+        glm::vec4 *up,
+        glm::vec4 *right,
+        glm::vec3 *velocity,
+        BoidId b_id
+) {
     // Update orientation
-    orient->forward[b_id] = glm::vec4(glm::normalize(velocity[b_id]), 0.f);
-    orient->right[b_id] = glm::vec4(glm::normalize(
-            glm::cross(glm::vec3(orient->up[b_id]),glm::vec3(orient->forward[b_id]))
+    forward[b_id] = glm::vec4(glm::normalize(velocity[b_id]), 0.f);
+    right[b_id] = glm::vec4(glm::normalize(
+            glm::cross(glm::vec3(up[b_id]),glm::vec3(forward[b_id]))
     ), 0.f);
 
-    orient->up[b_id] = glm::vec4(glm::normalize(
-            glm::cross(glm::vec3(orient->forward[b_id]),glm::vec3(orient->right[b_id]))
+    up[b_id] = glm::vec4(glm::normalize(
+            glm::cross(glm::vec3(forward[b_id]), glm::vec3(right[b_id]))
     ), 0.f);
 
 }
@@ -66,7 +75,9 @@ __device__ void update_pos_vel(
         glm::vec3 *velocity,
         glm::vec3 *velocity_old,
         glm::vec3 acceleration,
-        BoidsOrientation *orient,
+        glm::vec4 *forward,
+        glm::vec4 *up,
+        glm::vec4 *right,
         float dt
 ) {
     float wall = 4.f;
@@ -126,10 +137,10 @@ __device__ void update_pos_vel(
     position[b_id] = position_old[b_id] + glm::vec4(velocity[b_id] * dt, 0.f);
 
     // Update orientation
-    update_orientation(orient, velocity, b_id);
+    update_orientation(forward, up, right, velocity, b_id);
 }
 
-__device__ void update_pos_vel_test(
+__device__ void update_pos_vel_shared(
         const SimulationParameters *params,
         const glm::vec3* obstacle_position,
         const float* obstacle_radius,
@@ -141,7 +152,9 @@ __device__ void update_pos_vel_test(
         glm::vec3 *velocity,
         glm::vec3 *velocity_old,
         glm::vec3 acceleration,
-        BoidsOrientation *orient,
+        glm::vec4 *forward,
+        glm::vec4 *up,
+        glm::vec4 *right,
         float dt
 ) {
     float wall = 4.f;
@@ -201,7 +214,7 @@ __device__ void update_pos_vel_test(
     position[b_id] = position_old[tid] + glm::vec4(velocity[b_id] * dt, 0.f);
 
     // Update orientation
-    update_orientation(orient, velocity, b_id);
+    update_orientation(forward, up, right, velocity, b_id);
 }
 
 __global__ void setup_curand(size_t max_boid_count) {
@@ -266,7 +279,9 @@ __global__ void ker_update_simulation_naive(
         glm::vec4 *position_old,
         glm::vec3 *velocity,
         glm::vec3 *velocity_old,
-        BoidsOrientation *orient,
+        glm::vec4 *forward,
+        glm::vec4 *up,
+        glm::vec4 *right,
         float dt
 ) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -327,7 +342,9 @@ __global__ void ker_update_simulation_naive(
             velocity,
             velocity_old,
             acceleration,
-            orient,
+            forward,
+            up,
+            right,
             dt
     );
 }
@@ -344,7 +361,9 @@ __global__ void ker_update_simulation_with_sort0(
         glm::vec4 *position_old,
         glm::vec3 *velocity,
         glm::vec3 *velocity_old,
-        BoidsOrientation *orient,
+        glm::vec4 *forward,
+        glm::vec4 *up,
+        glm::vec4 *right,
         float dt
 ) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -467,7 +486,7 @@ __global__ void ker_update_simulation_with_sort0(
     acceleration += glm::normalize(glm::vec3(2.f * (x - 0.5f), 2.f * (y - 0.5f), 2.f * (z - 0.5f))) * params->noise;
 
     // Update pos and vel
-    update_pos_vel_test(
+    update_pos_vel_shared(
             params,
             obstacle_position,
             obstacle_radius,
@@ -479,7 +498,9 @@ __global__ void ker_update_simulation_with_sort0(
             velocity,
             s_velocity_old,
             acceleration,
-            orient,
+            forward,
+            up,
+            right,
             dt
     );
 }
@@ -496,7 +517,9 @@ __global__ void ker_update_simulation_with_sort1(
         glm::vec4 *position_old,
         glm::vec3 *velocity,
         glm::vec3 *velocity_old,
-        BoidsOrientation *orient,
+        glm::vec4 *forward,
+        glm::vec4 *up,
+        glm::vec4 *right,
         float dt
 ) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -583,7 +606,7 @@ __global__ void ker_update_simulation_with_sort1(
     acceleration += glm::normalize(glm::vec3(2.f * (x - 0.5f), 2.f * (y - 0.5f), 2.f * (z - 0.5f))) * params->noise;
 
     // Update pos and vel
-    update_pos_vel_test(
+    update_pos_vel_shared(
             params,
             obstacle_position,
             obstacle_radius,
@@ -595,7 +618,9 @@ __global__ void ker_update_simulation_with_sort1(
             velocity,
             s_velocity_old,
             acceleration,
-            orient,
+            forward,
+            up,
+            right,
             dt
     );
 }
@@ -604,7 +629,9 @@ __global__ void ker_reset_simulation(
         const SimulationParameters *params,
         glm::vec4 *position_old,
         glm::vec3 *velocity_old,
-        BoidsOrientation *orient
+        glm::vec4 *forward,
+        glm::vec4 *up,
+        glm::vec4 *right
 ) {
     BoidId b_id = blockIdx.x * blockDim.x + threadIdx.x;
     if (b_id >= params->boids_count) return;
@@ -617,9 +644,9 @@ __global__ void ker_reset_simulation(
 
     position_old[b_id] = glm::vec4(x, y, z, 1.f);
 
-    orient->forward[b_id] = glm::vec4(0.f, 0.f, 1.f, 0.f);
-    orient->up[b_id] = glm::vec4(0.f, 1.f, 0.f, 0.f);
-    orient->right[b_id] = glm::vec4(1.f, 0.f, 0.f, 0.f);
+    forward[b_id] = glm::vec4(0.f, 0.f, 1.f, 0.f);
+    up[b_id] = glm::vec4(0.f, 1.f, 0.f, 0.f);
+    right[b_id] = glm::vec4(1.f, 0.f, 0.f, 0.f);
 
     x = (curand_uniform(&local_state) - 0.5f) * 2.f;
     y = (curand_uniform(&local_state) - 0.5f) * 2.f;
@@ -628,7 +655,7 @@ __global__ void ker_reset_simulation(
     velocity_old[b_id] = glm::vec3(0.05f * glm::normalize(glm::vec3(x, y, z)));
 
     // Update basis vectors (orientation)
-    update_orientation(orient, velocity_old, b_id);
+    update_orientation(forward, up, right, velocity_old, b_id);
 
     state[b_id] = local_state;
 }
@@ -679,12 +706,12 @@ void GPUBoids::init_default(const Boids& boids) {
         printf("[CUDA] Device %d: Compute Capability %d.%d\n", i, prop.major, prop.minor);
     }
 
-    // Allocate memory on the device using cudaMalloc
     size_t array_size_vec3 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec3);
     size_t array_size_vec4 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec4);
 
-    // Malloc and send boids data
     cudaError_t cuda_status;
+
+    // Allocate memory on the device using cudaMalloc
     cuda_status = cudaMalloc((void**)&m_dev_position, array_size_vec4);
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
     cuda_status = cudaMalloc((void**)&m_dev_velocity, array_size_vec3);
@@ -693,7 +720,11 @@ void GPUBoids::init_default(const Boids& boids) {
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
     cuda_status = cudaMalloc((void**)&m_dev_velocity_old, array_size_vec3);
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
-    cuda_status = cudaMalloc((void**)&m_dev_orient, sizeof(BoidsOrientation));
+    cuda_status = cudaMalloc((void**)&m_dev_forward, array_size_vec4);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_up, array_size_vec4);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_right, array_size_vec4);
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
 
     cuda_status = cudaMalloc((void**)&m_dev_obstacle_radius, SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(float));
@@ -701,11 +732,16 @@ void GPUBoids::init_default(const Boids& boids) {
     cuda_status = cudaMalloc((void**)&m_dev_obstacle_position, SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(glm::vec3));
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
 
-    cuda_status = cudaMemcpy(m_dev_position_old, boids.position, array_size_vec4, cudaMemcpyHostToDevice);
+    // Upload position, velocity and orientation to the gpu
+    cuda_status = cudaMemcpy(m_dev_position_old, boids.position.data(), array_size_vec4, cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    cuda_status = cudaMemcpy(m_dev_velocity_old, boids.velocity, array_size_vec3, cudaMemcpyHostToDevice);
+    cuda_status = cudaMemcpy(m_dev_velocity_old, boids.velocity.data(), array_size_vec3, cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    cuda_status = cudaMemcpy(m_dev_orient, &boids.orientation, sizeof(BoidsOrientation), cudaMemcpyHostToDevice);
+    cuda_status = cudaMemcpy(m_dev_forward, boids.orientation.forward.data(), array_size_vec4, cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(m_dev_up, boids.orientation.up.data(), array_size_vec4, cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(m_dev_right, boids.orientation.right.data(), array_size_vec4, cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
 
     // Prepare simulation params container
@@ -737,7 +773,9 @@ void GPUBoids::init_with_gl(const Boids &boids, const BoidsRenderer &renderer) {
 GPUBoids::~GPUBoids() {
     cudaFree(m_dev_position);
     cudaFree(m_dev_velocity);
-    cudaFree(m_dev_orient);
+    cudaFree(m_dev_forward);
+    cudaFree(m_dev_up);
+    cudaFree(m_dev_right);
     cudaFree(m_dev_sim_params);
     cudaFree(m_dev_cell_id);
     cudaFree(m_dev_boid_id);
@@ -763,7 +801,9 @@ void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params
             m_dev_position_old,
             m_dev_velocity,
             m_dev_velocity_old,
-            m_dev_orient,
+            m_dev_forward,
+            m_dev_up,
+            m_dev_right,
             dt
     );
     cudaDeviceSynchronize();
@@ -824,7 +864,9 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
                 m_dev_position_old,
                 m_dev_velocity,
                 m_dev_velocity_old,
-                m_dev_orient,
+                m_dev_forward,
+                m_dev_up,
+                m_dev_right,
                 dt
         );
     } else {
@@ -840,7 +882,9 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
                 m_dev_position_old,
                 m_dev_velocity,
                 m_dev_velocity_old,
-                m_dev_orient,
+                m_dev_forward,
+                m_dev_up,
+                m_dev_right,
                 dt
         );
     }
@@ -866,15 +910,26 @@ void GPUBoids::reset(const SimulationParameters &params) {
     size_t threads_per_block = 1024;
     size_t blocks_num = params.boids_count / threads_per_block + 1;
 
-    ker_reset_simulation<<<blocks_num, threads_per_block>>>(m_dev_sim_params, m_dev_position_old, m_dev_velocity_old, m_dev_orient);
+    ker_reset_simulation<<<blocks_num, threads_per_block>>>(
+            m_dev_sim_params,
+            m_dev_position_old,
+            m_dev_velocity_old,
+            m_dev_forward,
+            m_dev_up,
+            m_dev_right
+    );
 }
 
 void GPUBoids::move_boids_data_to_cpu(Boids &boids) {
     cudaError_t cuda_status;
     // TODO: use direct CUDA -> OPENGL
-    cuda_status = cudaMemcpy(boids.position, m_dev_position, sizeof(glm::vec4) * SimulationParameters::MAX_BOID_COUNT, cudaMemcpyDeviceToHost);
+    cuda_status = cudaMemcpy(boids.position.data(), m_dev_position, sizeof(glm::vec4) * SimulationParameters::MAX_BOID_COUNT, cudaMemcpyDeviceToHost);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
-    cuda_status = cudaMemcpy(&boids.orientation, m_dev_orient, sizeof(BoidsOrientation), cudaMemcpyDeviceToHost);
+    cuda_status = cudaMemcpy(boids.orientation.forward.data(), m_dev_forward, sizeof(glm::vec4) * SimulationParameters::MAX_BOID_COUNT, cudaMemcpyDeviceToHost);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(boids.orientation.up.data(), m_dev_up,sizeof(glm::vec4) * SimulationParameters::MAX_BOID_COUNT, cudaMemcpyDeviceToHost);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(boids.orientation.right.data(), m_dev_right,sizeof(glm::vec4) * SimulationParameters::MAX_BOID_COUNT, cudaMemcpyDeviceToHost);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
 }
 

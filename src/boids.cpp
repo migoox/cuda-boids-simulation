@@ -71,18 +71,18 @@ boids::BoidsRenderer::BoidsRenderer()
     GLCall( glBindVertexArray(0) );
 }
 
-void boids::BoidsRenderer::set_vbos(const SimulationParameters& params, glm::vec4 *position, const boids::BoidsOrientation &orientation) {
+void boids::BoidsRenderer::set_vbos(const SimulationParameters& params, const std::vector<glm::vec4> &position, const boids::BoidsOrientation &orientation) {
     GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_pos_vbo_id) );
-    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), position, GL_DYNAMIC_DRAW));
+    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), position.data(), GL_DYNAMIC_DRAW));
 
     GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_forward_vbo_id) );
-    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.forward, GL_DYNAMIC_DRAW));
+    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.forward.data(), GL_DYNAMIC_DRAW));
 
     GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_up_vbo_id) );
-    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.up, GL_DYNAMIC_DRAW));
+    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.up.data(), GL_DYNAMIC_DRAW));
 
     GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_right_vbo_id) );
-    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.right, GL_DYNAMIC_DRAW));
+    GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.right.data(), GL_DYNAMIC_DRAW));
 }
 
 void boids::BoidsRenderer::draw(const common::ShaderProgram &shader_program, int count) const {
@@ -92,6 +92,12 @@ void boids::BoidsRenderer::draw(const common::ShaderProgram &shader_program, int
 }
 
 boids::Boids::Boids(const boids::SimulationParameters &sim_params) {
+    this->position.resize(SimulationParameters::MAX_BOID_COUNT);
+    this->orientation.forward.resize(SimulationParameters::MAX_BOID_COUNT);
+    this->orientation.up.resize(SimulationParameters::MAX_BOID_COUNT);
+    this->orientation.right.resize(SimulationParameters::MAX_BOID_COUNT);
+    this->velocity.resize(SimulationParameters::MAX_BOID_COUNT);
+    this->acceleration.resize(SimulationParameters::MAX_BOID_COUNT);
     this->reset(sim_params);
 }
 

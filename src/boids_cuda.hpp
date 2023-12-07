@@ -39,7 +39,9 @@ namespace boids::cuda_gpu {
         glm::vec3 *m_dev_obstacle_position{};
         float *m_dev_obstacle_radius{};
 
-        BoidsOrientation *m_dev_orient{};
+        glm::vec4 *m_dev_forward{};
+        glm::vec4 *m_dev_up{};
+        glm::vec4 *m_dev_right{};
 
         // cell_id -> boid_id
         CellId *m_dev_cell_id;

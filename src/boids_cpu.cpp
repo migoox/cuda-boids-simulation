@@ -4,12 +4,12 @@
 #include <execution>
 
 void boids::cpu::update_simulation_naive(
-        const SimulationParameters &sim_params,
-        glm::vec4 position[SimulationParameters::MAX_BOID_COUNT],
-        glm::vec3 velocity[SimulationParameters::MAX_BOID_COUNT],
-        glm::vec3 acceleration[SimulationParameters::MAX_BOID_COUNT],
-        boids::BoidsOrientation& orientation,
-        float dt
+            const SimulationParameters &sim_params,
+            std::vector<glm::vec4> &position,
+            std::vector<glm::vec3> &velocity,
+            std::vector<glm::vec3> &acceleration,
+            BoidsOrientation &orientation,
+            float dt
 ) {
     for (BoidId b_id = 0; b_id < sim_params.boids_count; ++b_id) {
         glm::vec3 separation(0.);

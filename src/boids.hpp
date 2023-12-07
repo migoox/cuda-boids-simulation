@@ -49,9 +49,9 @@ namespace boids {
     };
 
     struct BoidsOrientation {
-        glm::vec4 forward[SimulationParameters::MAX_BOID_COUNT]{}; // z axis direction
-        glm::vec4 up[SimulationParameters::MAX_BOID_COUNT]{};      // y axis direction
-        glm::vec4 right[SimulationParameters::MAX_BOID_COUNT]{};   // x axis direction
+        std::vector<glm::vec4> forward; // z axis direction
+        std::vector<glm::vec4> up;      // y axis direction
+        std::vector<glm::vec4> right;   // x axis direction
     };
 
     class Boids {
@@ -64,11 +64,11 @@ namespace boids {
 
     public:
         // Boid's simulation properties
-        glm::vec3 velocity[SimulationParameters::MAX_BOID_COUNT]{};
-        glm::vec3 acceleration[SimulationParameters::MAX_BOID_COUNT]{};
+        std::vector<glm::vec3> velocity;
+        std::vector<glm::vec3> acceleration;
 
         // Boid orientation
-        glm::vec4 position[SimulationParameters::MAX_BOID_COUNT]{};
+        std::vector<glm::vec4> position;
         // Boid's basis vectors (assuming left-handed)
         BoidsOrientation orientation;
     };
@@ -79,13 +79,11 @@ namespace boids {
         BoidsRenderer();
 
         void draw(const common::ShaderProgram &shader_program, int count) const;
-        void set_vbos(const SimulationParameters &params, glm::vec4 *position, const BoidsOrientation &orientation);
-
+        void set_vbos(const SimulationParameters &params, const std::vector<glm::vec4> &position, const BoidsOrientation &orientation);
     private:
         common::Mesh m_mesh;
 
         GLuint m_pos_vbo_id, m_forward_vbo_id, m_up_vbo_id, m_right_vbo_id;
-
     };
 
     class Obstacles {
