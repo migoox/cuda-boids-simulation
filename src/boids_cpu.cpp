@@ -11,49 +11,42 @@ void boids::cpu::update_simulation_naive(
         boids::BoidsOrientation& orientation,
         float dt
 ) {
-    std::ranges::iota_view indexes((size_t)0, (size_t)sim_params.boids_count);
-    std::for_each(std::execution::par, indexes.begin(), indexes.end(),
-                  [&acceleration,
-                          &velocity = std::as_const(velocity),
-                          &position = std::as_const(position),
-                          &sim_params = std::as_const(sim_params)
-                  ](size_t b_id) {
-                      glm::vec3 separation(0.);
-                      glm::vec3 avg_vel(0.);
-                      glm::vec3 avg_pos(0.);
-                      uint32_t neighbors_count = 0;
+    for (BoidId b_id = 0; b_id < sim_params.boids_count; ++b_id) {
+        glm::vec3 separation(0.);
+        glm::vec3 avg_vel(0.);
+        glm::vec3 avg_pos(0.);
+        uint32_t neighbors_count = 0;
 
-                      for (BoidId other_id = 0; other_id < sim_params.boids_count; ++other_id) {
-                          if (other_id == b_id) {
-                              continue;
-                          }
+        for (BoidId other_id = 0; other_id < sim_params.boids_count; ++other_id) {
+            if (other_id == b_id) {
+                continue;
+            }
 
-                          auto distance2 = glm::dot(position[b_id] - position[other_id], position[b_id] - position[other_id]);
-                          if (distance2 > sim_params.distance * sim_params.distance) {
-                              continue;
-                          }
+            auto distance2 = glm::dot(position[b_id] - position[other_id], position[b_id] - position[other_id]);
+            if (distance2 > sim_params.distance * sim_params.distance) {
+                continue;
+            }
 
-                          separation += glm::vec3(glm::normalize(position[b_id] - position[other_id]) / distance2);
-                          avg_vel += velocity[other_id];
-                          avg_pos += glm::vec3(position[other_id]);
+            separation += glm::vec3(glm::normalize(position[b_id] - position[other_id]) / distance2);
+            avg_vel += velocity[other_id];
+            avg_pos += glm::vec3(position[other_id]);
 
-                          ++neighbors_count;
-                      }
+            ++neighbors_count;
+        }
 
-                      if (neighbors_count > 0) {
-                          avg_vel /= float(neighbors_count);
+        if (neighbors_count > 0) {
+            avg_vel /= float(neighbors_count);
 
-                          avg_pos /= float(neighbors_count);
+            avg_pos /= float(neighbors_count);
 
-                          // Final acceleration of the current boid
-                          acceleration[b_id] =
-                                  sim_params.separation * separation +
-                                  sim_params.alignment * (avg_vel - velocity[b_id]) +
-                                  sim_params.cohesion * (avg_pos - glm::vec3(position[b_id]));
-                      }
-                      acceleration[b_id] += sim_params.noise * rand_unit_vec();
-                  }
-    );
+            // Final acceleration of the current boid
+            acceleration[b_id] =
+                    sim_params.separation * separation +
+                    sim_params.alignment * (avg_vel - velocity[b_id]) +
+                    sim_params.cohesion * (avg_pos - glm::vec3(position[b_id]));
+        }
+        acceleration[b_id] += sim_params.noise * rand_unit_vec();
+    }
 
     float wall = 4.f;
     float wall_acc = 15.f;

@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.26)
 project(boids_simulation LANGUAGES CXX CUDA)
 
 # Set cpp standard
-set(CMAKE_CUDA_STANDARD 20)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17)
 
 # Find patterns with these patterns and add them to sources
 file(GLOB SOURCES
