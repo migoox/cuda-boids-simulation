@@ -194,10 +194,11 @@ int main() {
                     sim_params.boids_count = new_sim_params.boids_count;
 
                     basic_sp.set_uniform_mat4f("u_model", glm::scale(sim_params.aquarium_size));
-                    if (curr_item == Solution::CPUNaive) {
-                        boids.reset(sim_params);
-                    } else {
-                        gpu_boids.reset(sim_params);
+                    boids.reset(sim_params);
+                    boids_renderer.set_vbos(sim_params, boids.position, boids.orientation);
+
+                    if (curr_item != Solution::CPUNaive) {
+                        gpu_boids.reset(sim_params, boids, boids_renderer);
                     }
                 }
 
@@ -217,7 +218,7 @@ int main() {
                 ImGui::SliderFloat("Separation", &sim_params.separation, 0.0f, 5.0f);
                 ImGui::SliderFloat("Alignment", &sim_params.alignment, 0.0f, 5.0f);
                 ImGui::SliderFloat("Cohesion", &sim_params.cohesion, 0.0f, 5.0f);
-                ImGui::SliderFloat("Min speed", &sim_params.min_speed, 0.0f, sim_params.max_speed);
+                ImGui::SliderFloat("Min speed", &sim_params.min_speed, boids::SimulationParameters::MIN_SPEED, sim_params.max_speed);
                 ImGui::SliderFloat("Max speed", &sim_params.max_speed, sim_params.min_speed, boids::SimulationParameters::MAX_SPEED);
                 ImGui::SliderFloat("Noise", &sim_params.noise, 0.0f, 5.0f);
             }
@@ -272,16 +273,19 @@ int main() {
         dt_as_seconds = delta_time.count();
         if (curr_solution == Solution::CPUNaive) {
             boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, boids.orientation, dt_as_seconds);
-        } else if (curr_solution == Solution::GPUCUDASortVar1) {
-            gpu_boids.update_simulation_with_sort(sim_params, obstacles, boids, dt_as_seconds, 0);
-        } else if (curr_solution == Solution::GPUCUDASortVar2) {
-            gpu_boids.update_simulation_with_sort(sim_params, obstacles, boids, dt_as_seconds, 1);
+            boids_renderer.set_vbos(sim_params, boids.position, boids.orientation);
         } else {
-            gpu_boids.update_simulation_naive(sim_params, obstacles, boids, dt_as_seconds);
+            if (curr_solution == Solution::GPUCUDASortVar1) {
+                gpu_boids.update_simulation_with_sort(sim_params, obstacles, boids, dt_as_seconds, 0);
+            } else if (curr_solution == Solution::GPUCUDASortVar2) {
+                gpu_boids.update_simulation_with_sort(sim_params, obstacles, boids, dt_as_seconds, 1);
+            } else {
+                gpu_boids.update_simulation_naive(sim_params, obstacles, boids, dt_as_seconds);
+            }
+            if (!gpu_boids.gl_buffers_registerd()) {
+                boids_renderer.set_vbos(sim_params, boids.position, boids.orientation);
+            }
         }
-
-
-        boids_renderer.set_vbos(sim_params, boids.position, boids.orientation);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

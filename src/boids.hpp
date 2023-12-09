@@ -6,6 +6,9 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include "primitives.h"
+#include <cuda_runtime.h>
+#include <cuda_gl_interop.h>
+
 
 namespace boids {
     using BoidId = uint32_t;
@@ -22,10 +25,12 @@ namespace boids {
         constexpr static const float MAX_AQUARIUM_SIZE_Y = 300.f;
         constexpr static const float MAX_AQUARIUM_SIZE_Z = 300.f;
 
-        constexpr static const float MIN_DISTANCE = 0.5f;
+        constexpr static const float MIN_DISTANCE = 1.f;
+
+        constexpr static const float MIN_SPEED = 0.5f;
         constexpr static const float MAX_SPEED = 5.f;
 
-        // This formula works as long as MIN_DISTANCE = 0.5f
+        // This formula works as long as MIN_DISTANCE = 1.f
         constexpr static const size_t MAX_CELL_COUNT = MAX_AQUARIUM_SIZE_X * MAX_AQUARIUM_SIZE_Y * MAX_AQUARIUM_SIZE_Z;
 
         constexpr static const size_t MAX_OBSTACLES_COUNT = 8;
@@ -80,6 +85,8 @@ namespace boids {
 
         void draw(const common::ShaderProgram &shader_program, int count) const;
         void set_vbos(const SimulationParameters &params, const std::vector<glm::vec4> &position, const BoidsOrientation &orientation);
+        void cuda_register_vbos(cudaGraphicsResource** positions, cudaGraphicsResource** forward, cudaGraphicsResource** up, cudaGraphicsResource** right) const;
+        
     private:
         common::Mesh m_mesh;
 

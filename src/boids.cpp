@@ -2,6 +2,8 @@
 #include "boids.hpp"
 #include "gl_debug.h"
 #include "boids_cpu.hpp"
+#include "cuda_runtime.h"
+#include "cuda_gl_interop.h"
 
 boids::SimulationParameters::SimulationParameters()
         : distance(5.f),
@@ -85,6 +87,20 @@ void boids::BoidsRenderer::set_vbos(const SimulationParameters& params, const st
     GLCall( glBufferData(GL_ARRAY_BUFFER, params.boids_count * sizeof(glm::vec4), orientation.right.data(), GL_DYNAMIC_DRAW));
 }
 
+void boids::BoidsRenderer::cuda_register_vbos(cudaGraphicsResource** positions, cudaGraphicsResource** forward, cudaGraphicsResource** up, cudaGraphicsResource** right) const {
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_pos_vbo_id) );
+    cudaGraphicsGLRegisterBuffer(positions, m_pos_vbo_id, cudaGraphicsMapFlagsWriteDiscard);
+
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_forward_vbo_id) );
+    cudaGraphicsGLRegisterBuffer(forward, m_forward_vbo_id, cudaGraphicsMapFlagsWriteDiscard);
+
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_up_vbo_id) );
+    cudaGraphicsGLRegisterBuffer(up, m_up_vbo_id, cudaGraphicsMapFlagsWriteDiscard);
+
+    GLCall( glBindBuffer(GL_ARRAY_BUFFER, m_right_vbo_id) );
+    cudaGraphicsGLRegisterBuffer(right, m_right_vbo_id, cudaGraphicsMapFlagsWriteDiscard);
+}
+
 void boids::BoidsRenderer::draw(const common::ShaderProgram &shader_program, int count) const {
     shader_program.bind();
     m_mesh.bind();
@@ -132,6 +148,16 @@ void boids::Boids::reset(const SimulationParameters& sim_params) {
 
 
 glm::vec3 boids::rand_vec(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z) {
+    if (max_x < min_x) {
+        std::swap(min_x, max_x);
+    }
+    if (max_y < min_y) {
+        std::swap(min_y, max_y);
+    }
+    if (max_z < min_z) {
+        std::swap(min_z, max_z);
+    }
+
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dist_x(min_x, max_x);

@@ -676,24 +676,24 @@ void check_cuda_error(const cudaError_t &cuda_status, const char *msg) {
     }
 }
 
-GPUBoids::GPUBoids(const boids::Boids& boids, const boids::BoidsRenderer& renderer) {
+GPUBoids::GPUBoids(const boids::Boids& boids, const boids::BoidsRenderer& renderer) : m_gl_registered(false) {
     cudaError_t cuda_err;
     int gl_device_id;
     unsigned int gl_device_count;
-    // Try to find and set opengl device
-    cuda_err = cudaGLGetDevices(&gl_device_count,&gl_device_id,1,cudaGLDeviceListAll);
-    cuda_err = cudaSetDevice(gl_device_id);
+
+	// Try to find and set opengl device
+	cuda_err = cudaGLGetDevices(&gl_device_count, &gl_device_id, 1, cudaGLDeviceListAll);
+	cuda_err = cudaSetDevice(gl_device_id);
     if (cuda_err == cudaSuccess) {
-        std::cout << "[CUDA] Found cuda device attached to the current OpenGL context: " << gl_device_id << ". GL buffers registration are not currently supported.\n";
-        // TODO: register gl buffers
-        this->init_default(boids);
-    } else {
-        std::cout << "[CUDA]: Couldn't find any cuda device attached to teh current OpenGL context, GL buffers aren't going to be registered.\n";
+        std::cout << "[CUDA] Found cuda device attached to the current OpenGL context: " << gl_device_id << ". GL Buffers are going to be registered.\n";
+		this->init_with_gl(boids, renderer);
+	} else {
+        std::cout << "[CUDA]: Couldn't find any cuda device attached to the current OpenGL context. GL buffers aren't going to be registered.\n";
         this->init_default(boids);
     }
 }
 
-GPUBoids::GPUBoids(const Boids &boids) {
+GPUBoids::GPUBoids(const Boids& boids) : m_gl_registered(false) {
     this->init_default(boids);
 }
 
@@ -766,16 +766,92 @@ void GPUBoids::init_default(const Boids& boids) {
 }
 
 void GPUBoids::init_with_gl(const Boids &boids, const BoidsRenderer &renderer) {
-    // TODO
-    std::terminate();
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    for (int i = 0; i < deviceCount; ++i) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, i);
+        printf("[CUDA] Device %d: Compute Capability %d.%d\n", i, prop.major, prop.minor);
+    }
+
+    m_gl_registered = true;
+
+    size_t array_size_vec3 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec3);
+    size_t array_size_vec4 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec4);
+
+    cudaError_t cuda_status;
+    // Register OpenGL Buffers
+    size_t buffer_size;
+    renderer.cuda_register_vbos(&m_positionVBO_CUDA, &m_forwardVBO_CUDA, &m_upVBO_CUDA, &m_rightVBO_CUDA);
+    cudaGraphicsMapResources(1, &m_positionVBO_CUDA, 0);
+    cudaGraphicsResourceGetMappedPointer((void**)&m_dev_position_vbo, &buffer_size, m_positionVBO_CUDA);
+
+    cudaGraphicsMapResources(1, &m_forwardVBO_CUDA, 0);
+    cudaGraphicsResourceGetMappedPointer((void**)&m_dev_forward, &buffer_size, m_forwardVBO_CUDA);
+
+    cudaGraphicsMapResources(1, &m_upVBO_CUDA, 0);
+    cudaGraphicsResourceGetMappedPointer((void**)&m_dev_up, &buffer_size, m_upVBO_CUDA);
+
+    cudaGraphicsMapResources(1, &m_rightVBO_CUDA, 0);
+    cudaGraphicsResourceGetMappedPointer((void**)&m_dev_right, &buffer_size, m_rightVBO_CUDA);
+
+    // Allocate memory on the device using cudaMalloc
+    cuda_status = cudaMalloc((void**)&m_dev_position, array_size_vec4);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_velocity, array_size_vec3);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_position_old, array_size_vec4);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_velocity_old, array_size_vec3);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    
+    cuda_status = cudaMalloc((void**)&m_dev_obstacle_radius, SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(float));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_obstacle_position, SimulationParameters::MAX_OBSTACLES_COUNT * sizeof(glm::vec3));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+
+    // Upload position, velocity and orientation to the gpu
+    cuda_status = cudaMemcpy(m_dev_position_old, boids.position.data(), array_size_vec4, cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(m_dev_velocity_old, boids.velocity.data(), array_size_vec3, cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+
+    // Prepare simulation params container
+    cuda_status = cudaMalloc((void**)&m_dev_sim_params, sizeof(SimulationParameters));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed ");
+
+    // Prepare boid_id and cell_id
+    cuda_status = cudaMalloc((void**)&m_dev_cell_id, SimulationParameters::MAX_BOID_COUNT * sizeof(CellId));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_boid_id, SimulationParameters::MAX_BOID_COUNT * sizeof(BoidId));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+
+    // Prepare start and end arrays
+    cuda_status = cudaMalloc((void**)&m_dev_cell_start, SimulationParameters::MAX_CELL_COUNT * sizeof(int));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    cuda_status = cudaMalloc((void**)&m_dev_cell_end, SimulationParameters::MAX_CELL_COUNT * sizeof(int));
+    check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
+    init_starts << <1024, SimulationParameters::MAX_CELL_COUNT / 1024 + 1 >> > (m_dev_cell_start, m_dev_cell_end, SimulationParameters::MAX_CELL_COUNT);
+
+    // Setup curand
+    setup_curand << <1024, SimulationParameters::MAX_BOID_COUNT / 1024 + 1 >> > (SimulationParameters::MAX_BOID_COUNT);
 }
 
 GPUBoids::~GPUBoids() {
+    if (m_gl_registered) {
+        cudaGraphicsUnmapResources(1, &m_positionVBO_CUDA, 0);
+        cudaGraphicsUnmapResources(1, &m_forwardVBO_CUDA, 0);
+        cudaGraphicsUnmapResources(1, &m_upVBO_CUDA, 0);
+        cudaGraphicsUnmapResources(1, &m_rightVBO_CUDA, 0);
+    } else {
+        cudaFree(m_dev_forward);
+        cudaFree(m_dev_up);
+        cudaFree(m_dev_right);
+    }
     cudaFree(m_dev_position);
+    cudaFree(m_dev_position_old);
+    cudaFree(m_dev_velocity_old);
     cudaFree(m_dev_velocity);
-    cudaFree(m_dev_forward);
-    cudaFree(m_dev_up);
-    cudaFree(m_dev_right);
     cudaFree(m_dev_sim_params);
     cudaFree(m_dev_cell_id);
     cudaFree(m_dev_boid_id);
@@ -808,8 +884,10 @@ void GPUBoids::update_simulation_naive(const boids::SimulationParameters &params
     );
     cudaDeviceSynchronize();
 
-    move_boids_data_to_cpu(boids);
-    swap_buffers();
+    if (!m_gl_registered) {
+        move_boids_data_to_cpu(boids);
+    }
+    swap_buffers(params.boids_count);
 }
 
 void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &params, const Obstacles &obstacles, Boids &boids, float dt, int variant = 1) {
@@ -890,6 +968,7 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     }
     cudaDeviceSynchronize();
 
+
     // 5.
     ker_clear_starts<<<blocks_num, threads_per_block>>>(
             m_dev_cell_id,
@@ -899,30 +978,55 @@ void GPUBoids::update_simulation_with_sort(const boids::SimulationParameters &pa
     );
     cudaDeviceSynchronize();
 
-    move_boids_data_to_cpu(boids);
-    swap_buffers();
+    if (!m_gl_registered) {
+        move_boids_data_to_cpu(boids);
+    }
+    swap_buffers(params.boids_count);
 }
 
-void GPUBoids::reset(const SimulationParameters &params) {
-    cudaError_t cuda_status = cudaMemcpy(m_dev_sim_params, &params, sizeof(boids::SimulationParameters), cudaMemcpyHostToDevice);
+void GPUBoids::reset(const SimulationParameters& params, const Boids& boids, const BoidsRenderer& renderer) {
+    size_t array_size_vec3 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec3);
+    size_t array_size_vec4 = SimulationParameters::MAX_BOID_COUNT * sizeof(glm::vec4);
+    cudaError cuda_status;
+    size_t buffer_size;
+
+    cuda_status = cudaMemcpy(m_dev_position_old, boids.position.data(), array_size_vec4, cudaMemcpyHostToDevice);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    cuda_status = cudaMemcpy(m_dev_velocity_old, boids.velocity.data(), array_size_vec3, cudaMemcpyHostToDevice);
+    check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+    
+	if (m_gl_registered) {
+		// Unregister the resources
+		cudaGraphicsUnregisterResource(m_positionVBO_CUDA);
+		cudaGraphicsUnregisterResource(m_forwardVBO_CUDA);
+		cudaGraphicsUnregisterResource(m_upVBO_CUDA);
+		cudaGraphicsUnregisterResource(m_rightVBO_CUDA);
 
-    size_t threads_per_block = 1024;
-    size_t blocks_num = params.boids_count / threads_per_block + 1;
+		// Register new vbos buffers
+		renderer.cuda_register_vbos(&m_positionVBO_CUDA, &m_forwardVBO_CUDA, &m_upVBO_CUDA, &m_rightVBO_CUDA);
+		cudaGraphicsMapResources(1, &m_positionVBO_CUDA, 0);
+		cudaGraphicsResourceGetMappedPointer((void**)&m_dev_position_vbo, &buffer_size, m_positionVBO_CUDA);
 
-    ker_reset_simulation<<<blocks_num, threads_per_block>>>(
-            m_dev_sim_params,
-            m_dev_position_old,
-            m_dev_velocity_old,
-            m_dev_forward,
-            m_dev_up,
-            m_dev_right
-    );
+		cudaGraphicsMapResources(1, &m_forwardVBO_CUDA, 0);
+		cudaGraphicsResourceGetMappedPointer((void**)&m_dev_forward, &buffer_size, m_forwardVBO_CUDA);
+
+		cudaGraphicsMapResources(1, &m_upVBO_CUDA, 0);
+		cudaGraphicsResourceGetMappedPointer((void**)&m_dev_up, &buffer_size, m_upVBO_CUDA);
+
+		cudaGraphicsMapResources(1, &m_rightVBO_CUDA, 0);
+		cudaGraphicsResourceGetMappedPointer((void**)&m_dev_right, &buffer_size, m_rightVBO_CUDA);
+	}
+	else {
+		cuda_status = cudaMemcpy(m_dev_forward, boids.orientation.forward.data(), array_size_vec4, cudaMemcpyHostToDevice);
+		check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+		cuda_status = cudaMemcpy(m_dev_up, boids.orientation.up.data(), array_size_vec4, cudaMemcpyHostToDevice);
+		check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+		cuda_status = cudaMemcpy(m_dev_right, boids.orientation.right.data(), array_size_vec4, cudaMemcpyHostToDevice);
+		check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
+	}
 }
-
 void GPUBoids::move_boids_data_to_cpu(Boids &boids) {
     cudaError_t cuda_status;
-    // TODO: use direct CUDA -> OPENGL
     cuda_status = cudaMemcpy(boids.position.data(), m_dev_position, sizeof(glm::vec4) * SimulationParameters::MAX_BOID_COUNT, cudaMemcpyDeviceToHost);
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
     cuda_status = cudaMemcpy(boids.orientation.forward.data(), m_dev_forward, sizeof(glm::vec4) * SimulationParameters::MAX_BOID_COUNT, cudaMemcpyDeviceToHost);
@@ -933,13 +1037,19 @@ void GPUBoids::move_boids_data_to_cpu(Boids &boids) {
     check_cuda_error(cuda_status, "[CUDA]: cudaMemcpy failed: ");
 }
 
-void GPUBoids::swap_buffers() {
-    glm::vec4 *temp_pos = m_dev_position;
-    glm::vec3 *temp_vel = m_dev_velocity;
+void GPUBoids::swap_buffers(int count) {
+	glm::vec4* temp_pos = m_dev_position;
+	glm::vec3* temp_vel = m_dev_velocity;
 
-    m_dev_position = m_dev_position_old;
-    m_dev_velocity = m_dev_velocity_old;
+	m_dev_position = m_dev_position_old;
+	m_dev_velocity = m_dev_velocity_old;
 
-    m_dev_position_old = temp_pos;
-    m_dev_velocity_old = temp_vel;
+	m_dev_position_old = temp_pos;
+	m_dev_velocity_old = temp_vel;
+
+	if (m_gl_registered) {
+        cudaError_t cuda_status = cudaMemcpy(m_dev_position_vbo, m_dev_position_old, sizeof(glm::vec4) * count, cudaMemcpyDeviceToDevice);
+        check_cuda_error(cuda_status, "[CUDA]: m_dev_poistion_vbo cudaMemcpy failed: ");
+
+	}
 }

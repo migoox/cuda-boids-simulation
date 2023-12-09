@@ -7,6 +7,10 @@ project(boids_simulation LANGUAGES CXX CUDA)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CXX_STANDARD 17)
 
+# Find CUDA package
+find_package(CUDA REQUIRED)
+include_directories(${CUDA_INCLUDE_DIRS})
+
 # Find patterns with these patterns and add them to sources
 file(GLOB SOURCES
     "src/*.cpp"
