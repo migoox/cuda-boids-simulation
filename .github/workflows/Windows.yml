@@ -68,7 +68,7 @@ jobs:
         cuda: ${{ matrix.cuda }}
         visual_studio: ${{ matrix.visual_studio }}
       shell: powershell
-      run: .\scripts\actions\install_cuda_windows.ps1
+      run: .\.github\scripts\actions\install_cuda_windows.ps1
 
     - name: nvcc check
       shell: powershell
