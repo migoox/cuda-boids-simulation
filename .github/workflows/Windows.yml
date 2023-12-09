@@ -6,7 +6,7 @@ on:
       - "**"
       - "!.github/**"
       - ".github/workflows/Windows.yml"
-      - "!scripts"
+      - "!.github/scripts/"
       - ".github/scripts/install_cuda_windows.ps1"
       - "!*.md"
 jobs:

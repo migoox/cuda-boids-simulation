@@ -6,7 +6,7 @@ on:
       - "**"
       - "!.github/**"
       - ".github/workflows/Ubuntu.yml"
-      - "!scripts/"
+      - "!.github/scripts/"
       - ".github/scripts/actions/install_cuda_ubuntu.sh"
       - "!*.md"
 jobs:
