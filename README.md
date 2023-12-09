@@ -5,9 +5,9 @@
 ## Usage
 1. Use `W`, `S`, `A`, `D` to rotate the camera and `Q`, `E` to zoom in/out.
 2. Use `Simulation` window to
-  1. Restart the simulation with different aquarium size, boids count and algorithm,
-  2. Modify the simulation parameters,
-  3. Add obstacles.
+    - Restart the simulation with different aquarium size, boids count and algorithm,
+    - Modify the simulation parameters,
+    - Add obstacles.
 
 ## Compilation guide
 ### Linux
