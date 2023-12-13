@@ -105,6 +105,11 @@ namespace boids {
         float &radius(size_t elem);
         glm::vec3 &pos(size_t elem);
 
+        const float &radius(size_t elem) const;
+        const glm::vec3 &pos(size_t elem) const;
+
+        void clear();
+
         size_t count() const { return m_radius.size(); }
 
         void draw(common::ShaderProgram& program);

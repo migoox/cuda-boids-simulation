@@ -200,6 +200,8 @@ int main() {
                     if (curr_item != Solution::CPUNaive) {
                         gpu_boids.reset(sim_params, boids, boids_renderer);
                     }
+
+                    obstacles.clear();
                 }
 
                 ImGui::Combo("Solution", reinterpret_cast<int *>(&curr_item), items, IM_ARRAYSIZE(items));
@@ -272,7 +274,7 @@ int main() {
         // Get the delta time in seconds
         dt_as_seconds = delta_time.count();
         if (curr_solution == Solution::CPUNaive) {
-            boids::cpu::update_simulation_naive(sim_params, boids.position, boids.velocity, boids.acceleration, boids.orientation, dt_as_seconds);
+            boids::cpu::update_simulation_naive(sim_params, obstacles, boids.position, boids.velocity, boids.acceleration, boids.orientation, dt_as_seconds);
             boids_renderer.set_vbos(sim_params, boids.position, boids.orientation);
         } else {
             if (curr_solution == Solution::GPUCUDASortVar1) {

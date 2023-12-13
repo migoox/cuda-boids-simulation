@@ -209,3 +209,16 @@ void boids::Obstacles::draw(common::ShaderProgram &program) {
     }
     m_box.draw_instanced(program, m_radius.size());
 }
+
+const float &boids::Obstacles::radius(size_t elem) const {
+    return m_radius[elem];
+}
+
+const glm::vec3 &boids::Obstacles::pos(size_t elem) const {
+    return m_pos[elem];
+}
+
+void boids::Obstacles::clear() {
+    m_pos.clear();
+    m_radius.clear();
+}

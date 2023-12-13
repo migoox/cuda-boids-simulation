@@ -831,10 +831,10 @@ void GPUBoids::init_with_gl(const Boids &boids, const BoidsRenderer &renderer) {
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
     cuda_status = cudaMalloc((void**)&m_dev_cell_end, SimulationParameters::MAX_CELL_COUNT * sizeof(int));
     check_cuda_error(cuda_status, "[CUDA]: cudaMalloc failed: ");
-    init_starts << <1024, SimulationParameters::MAX_CELL_COUNT / 1024 + 1 >> > (m_dev_cell_start, m_dev_cell_end, SimulationParameters::MAX_CELL_COUNT);
+    init_starts<<<1024, SimulationParameters::MAX_CELL_COUNT / 1024 + 1>>>(m_dev_cell_start, m_dev_cell_end, SimulationParameters::MAX_CELL_COUNT);
 
     // Setup curand
-    setup_curand << <1024, SimulationParameters::MAX_BOID_COUNT / 1024 + 1 >> > (SimulationParameters::MAX_BOID_COUNT);
+    setup_curand<<<1024, SimulationParameters::MAX_BOID_COUNT / 1024 + 1>>>(SimulationParameters::MAX_BOID_COUNT);
 }
 
 GPUBoids::~GPUBoids() {

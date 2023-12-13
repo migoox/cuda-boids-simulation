@@ -1,9 +1,11 @@
 #include "boids_cpu.hpp"
 #include <vector>
 #include <execution>
+#include <glm/glm.hpp>
 
 void boids::cpu::update_simulation_naive(
             const SimulationParameters &sim_params,
+            const Obstacles& obstacles,
             std::vector<glm::vec4> &position,
             std::vector<glm::vec3> &velocity,
             std::vector<glm::vec3> &acceleration,
@@ -74,7 +76,25 @@ void boids::cpu::update_simulation_naive(
             acceleration[i] += intensity * glm::vec3(0.f, 0.f, wall_acc);
         }
 
+        for (int j = 0; j < obstacles.count(); ++j) {
+            float dist = glm::distance(obstacles.pos(j), glm::vec3(position[i]));
+
+            if (dist > 1.4f * obstacles.radius(j)) {
+                continue;
+            }
+
+            glm::vec3 e = obstacles.pos(j) - glm::vec3(position[i]);
+            glm::vec3 d = glm::normalize(velocity[i]);
+            float de_dot = glm::dot(d, e);
+            if (de_dot < 0.f) {
+                continue;
+            }
+            glm::vec3 p = glm::vec3(position[i]) + d * de_dot;
+            acceleration[i] += glm::normalize(p - obstacles.pos(j)) * 12.f;
+        }
+
         velocity[i] += acceleration[i] * dt;
+
         if (glm::length(velocity[i]) > sim_params.max_speed) {
             velocity[i] = glm::normalize(velocity[i]) * sim_params.max_speed;
         } else if (glm::length(velocity[i]) < sim_params.min_speed){

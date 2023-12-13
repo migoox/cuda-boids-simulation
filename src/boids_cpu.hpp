@@ -5,6 +5,7 @@
 namespace boids::cpu {
     void update_simulation_naive(
             const SimulationParameters &sim_params,
+            const Obstacles& obstacles,
             std::vector<glm::vec4> &position,
             std::vector<glm::vec3> &velocity,
             std::vector<glm::vec3> &acceleration,
