@@ -77,6 +77,9 @@ int main() {
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
+    // Turn off vsync
+    glfwSwapInterval(0);
+
     // Initialize glew
     GLenum err = glewInit();
     if (GLEW_OK != err)
